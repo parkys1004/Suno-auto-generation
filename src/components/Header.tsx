@@ -1,5 +1,5 @@
 import React from 'react';
-import { Music, LayoutGrid, Sliders, Settings, Sun, Moon, Download, Upload } from 'lucide-react';
+import { Music, Settings, Sun, Moon, Download, Upload } from 'lucide-react';
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -42,8 +42,6 @@ export function Header({ onOpenSettings, theme, toggleTheme, onDownloadSettings,
         >
           {theme === 'light' ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
         </button>
-        <button className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><LayoutGrid className="w-5 h-5" /></button>
-        <button className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Sliders className="w-5 h-5" /></button>
         <button onClick={onOpenSettings} className="p-2 hover:bg-[var(--bg-secondary)] rounded-lg transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"><Settings className="w-5 h-5" /></button>
       </div>
     </header>
