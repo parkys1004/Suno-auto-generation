@@ -56,8 +56,24 @@ app.post(['/api/suno/generate', '/suno/generate'], async (req, res) => {
     res.json(response.data);
   } catch (error: any) {
     console.error('Suno API Error:', error.response?.data || error.message);
+    
+    let errorMessage = 'Failed to generate music';
+    if (error.response?.data) {
+      if (typeof error.response.data === 'string') {
+        errorMessage = error.response.data;
+      } else if (error.response.data.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response.data.error) {
+        errorMessage = error.response.data.error;
+      } else {
+        errorMessage = JSON.stringify(error.response.data);
+      }
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
     res.status(error.response?.status || 500).json({
-      error: error.response?.data?.message || 'Failed to generate music',
+      error: errorMessage,
       details: error.response?.data
     });
   }

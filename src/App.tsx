@@ -239,18 +239,37 @@ export default function App() {
     }
   };
 
+  const getApiUrl = () => {
+    let apiUrl = baseUrl || 'https://api.sunoapi.org/api/v1';
+    
+    if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
+      apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
+    }
+    if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
+      apiUrl = 'https://api.sunoapi.org/api/v1';
+    }
+    if (apiUrl.endsWith('/')) {
+      apiUrl = apiUrl.slice(0, -1);
+    }
+    return apiUrl;
+  };
+
   const handleGenerateWav = async (song: Song, e: React.MouseEvent) => {
     e.preventDefault();
     if (!song.id) return;
     
     setIsGeneratingWav(prev => ({ ...prev, [song.id]: true }));
     try {
-      const response = await axios.post('/api/suno/wav/generate', {
-        apiKey,
-        baseUrl,
+      const apiUrl = getApiUrl();
+      const response = await axios.post(`${apiUrl}/wav/generate`, {
         taskId: song.taskId || song.id,
         audioId: song.id,
         callBackUrl: ''
+      }, {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
       });
       
       if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
@@ -264,7 +283,7 @@ export default function App() {
         setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
       }
     } catch (err: any) {
-      alert(err.response?.data?.error || 'WAV 변환 요청에 실패했습니다.');
+      alert(err.response?.data?.error || err.response?.data?.message || err.message || 'WAV 변환 요청에 실패했습니다.');
       setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
     }
   };
@@ -408,7 +427,8 @@ export default function App() {
       intervalId = setInterval(async () => {
         for (const currentTaskId of taskIds) {
           try {
-            const response = await axios.get(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const apiUrl = getApiUrl();
+            const response = await axios.get(`${apiUrl}/status/${currentTaskId}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -512,7 +532,8 @@ export default function App() {
         for (const songId of taskIds) {
           const tId = wavPollingTasks[songId];
           try {
-            const response = await axios.get(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const apiUrl = getApiUrl();
+            const response = await axios.get(`${apiUrl}/status/${tId}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -854,16 +875,27 @@ export default function App() {
         // Add request number to the title for clarity
         const requestTitle = promptToUse.title;
 
-        const response = await axios.post('/api/suno/generate', {
-          apiKey,
-          baseUrl,
-          prompt: promptToUse.lyrics,
-          tags: promptToUse.style_prompt || promptToUse.tags,
-          title: requestTitle,
-          make_instrumental: musicType === 'instrumental',
-          negativeTags: excludedElements.map(t => t.label).join(', '),
-          vocalGender: gender,
-          model: model
+        const apiUrl = getApiUrl();
+        const payload = {
+          customMode: true,
+          instrumental: musicType === 'instrumental',
+          model: model || "V4_5ALL",
+          prompt: promptToUse.lyrics || "",
+          style: promptToUse.style_prompt || promptToUse.tags || "",
+          title: requestTitle || "",
+          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+          vocalGender: gender || "",
+          styleWeight: 0.65,
+          weirdnessConstraint: 0.65,
+          audioWeight: 0.65,
+          callBackUrl: "https://example.com/callback"
+        };
+
+        const response = await axios.post(`${apiUrl}/generate`, payload, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
@@ -889,7 +921,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || '음악 생성 요청에 실패했습니다.');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -960,16 +992,27 @@ export default function App() {
         // Ensure we stay on the music tab
         setLibraryTab('music');
 
-        const response = await axios.post('/api/suno/generate', {
-          apiKey,
-          baseUrl,
-          prompt: promptToUse.lyrics,
-          tags: promptToUse.style_prompt || promptToUse.tags,
-          title: requestTitle,
-          make_instrumental: musicType === 'instrumental',
-          negativeTags: excludedElements.map(t => t.label).join(', '),
-          vocalGender: gender,
-          model: model
+        const apiUrl = getApiUrl();
+        const payload = {
+          customMode: true,
+          instrumental: musicType === 'instrumental',
+          model: model || "V4_5ALL",
+          prompt: promptToUse.lyrics || "",
+          style: promptToUse.style_prompt || promptToUse.tags || "",
+          title: requestTitle || "",
+          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+          vocalGender: gender || "",
+          styleWeight: 0.65,
+          weirdnessConstraint: 0.65,
+          audioWeight: 0.65,
+          callBackUrl: "https://example.com/callback"
+        };
+
+        const response = await axios.post(`${apiUrl}/generate`, payload, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
@@ -995,7 +1038,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.message || '음악 생성 요청에 실패했습니다.');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1039,16 +1082,27 @@ export default function App() {
           gender = 'm';
         }
 
-        const response = await axios.post('/api/suno/generate', {
-          apiKey,
-          baseUrl,
-          prompt: promptToUse.lyrics,
-          tags: promptToUse.style_prompt || promptToUse.tags,
-          title: promptToUse.title,
-          make_instrumental: musicType === 'instrumental',
-          negativeTags: excludedElements.map(t => t.label).join(', '),
-          vocalGender: gender,
-          model: model
+        const apiUrl = getApiUrl();
+        const payload = {
+          customMode: true,
+          instrumental: musicType === 'instrumental',
+          model: model || "V4_5ALL",
+          prompt: promptToUse.lyrics || "",
+          style: promptToUse.style_prompt || promptToUse.tags || "",
+          title: promptToUse.title || "",
+          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+          vocalGender: gender || "",
+          styleWeight: 0.65,
+          weirdnessConstraint: 0.65,
+          audioWeight: 0.65,
+          callBackUrl: "https://example.com/callback"
+        };
+
+        const response = await axios.post(`${apiUrl}/generate`, payload, {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
         });
         
         if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
@@ -1073,7 +1127,8 @@ export default function App() {
           hasError = true;
         }
       } catch (err: any) {
-        setError(prev => prev ? `${prev}\n음악 생성 요청에 실패했습니다.` : '음악 생성 요청에 실패했습니다.');
+        const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.';
+        setError(prev => prev ? `${prev}\n${errMsg}` : errMsg);
         hasError = true;
       }
       
