@@ -253,6 +253,10 @@ export default function App() {
         callBackUrl: ''
       });
       
+      if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+        throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
+      }
+
       if (response.data) {
         alert('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
         setWavPollingTasks(prev => ({ ...prev, [song.id]: song.taskId || song.id }));
@@ -408,6 +412,11 @@ export default function App() {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
+            if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+              console.error('API 서버에 연결할 수 없습니다.');
+              continue;
+            }
+
             let data = response.data;
             if (data && data.code === 200) {
               data = data.data;
@@ -507,6 +516,11 @@ export default function App() {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
+            if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+              console.error('API 서버에 연결할 수 없습니다.');
+              continue;
+            }
+
             let data = response.data;
             if (data && data.code === 200) {
               data = data.data;
@@ -852,11 +866,15 @@ export default function App() {
           model: model
         });
         
+        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
+        }
+
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           setTaskIds(prev => [...prev, response.data.data.taskId]);
         } else if (response.data?.code && response.data.code !== 200) {
           setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
-        } else if (response.data && response.data.length > 0) {
+        } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
           const ids = slicedData.map((s: any) => s.id).join(',');
@@ -954,11 +972,15 @@ export default function App() {
           model: model
         });
         
+        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
+        }
+
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           setTaskIds(prev => [...prev, response.data.data.taskId]);
         } else if (response.data?.code && response.data.code !== 200) {
           setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
-        } else if (response.data && response.data.length > 0) {
+        } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
           const ids = slicedData.map((s: any) => s.id).join(',');
@@ -1029,12 +1051,16 @@ export default function App() {
           model: model
         });
         
+        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
+          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
+        }
+
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           newTaskIds.push(response.data.data.taskId);
         } else if (response.data?.code && response.data.code !== 200) {
           setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
           hasError = true;
-        } else if (response.data && response.data.length > 0) {
+        } else if (Array.isArray(response.data) && response.data.length > 0) {
           // Only take the first 2 songs as requested by the user
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
