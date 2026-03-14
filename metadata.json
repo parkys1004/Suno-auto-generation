@@ -1,0 +1,5 @@
+{
+  "name": "Remix: Remix: Suno AI 음악 생성기",
+  "description": "sunoapi.org API를 활용하여 사용자가 입력한 가사와 스타일로 음악을 자동 생성해주는 한글 애플리케이션입니다.",
+  "requestFramePermissions": []
+}
