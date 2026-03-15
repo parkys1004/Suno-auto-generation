@@ -17,7 +17,7 @@ const sanitizeKey = (key: string | null) => {
 };
 
 // API route to proxy requests to Suno API
-app.post(['/api/suno/generate', '/api/suno/generate/', '/suno/generate', '/suno/generate/'], async (req, res) => {
+app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
   try {
     const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
     const apiKey = sanitizeKey(rawApiKey);
@@ -104,7 +104,7 @@ app.post(['/api/suno/generate', '/api/suno/generate/', '/suno/generate', '/suno/
   }
 });
 
-app.post(['/api/suno/wav/generate', '/api/suno/wav/generate/', '/suno/wav/generate', '/suno/wav/generate/'], async (req, res) => {
+app.post(/.*\/suno\/wav\/generate\/?$/, async (req, res) => {
   try {
     const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = req.body;
     const apiKey = sanitizeKey(rawApiKey);
@@ -165,9 +165,10 @@ app.post(['/api/suno/wav/generate', '/api/suno/wav/generate/', '/suno/wav/genera
   }
 });
 
-app.get(['/api/suno/status/:id', '/api/suno/status/:id/', '/suno/status/:id', '/suno/status/:id/'], async (req, res) => {
+app.get(/.*\/suno\/status\/[^\/]+\/?$/, async (req, res) => {
   try {
-    const { id } = req.params;
+    const pathParts = req.path.split('/');
+    const id = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
     const authHeader = req.headers.authorization;
     const apiKey = sanitizeKey(authHeader?.split(' ')[1] || null);
     let apiUrl = (req.query.baseUrl as string) || 'https://api.sunoapi.org/api/v1';

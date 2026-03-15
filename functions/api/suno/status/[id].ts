@@ -75,8 +75,15 @@ export const onRequest = async (context: any) => {
       response = await performRequest(`${apiUrl}/generate/record-info/?taskId=${id}`);
     }
 
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    const data = await response.text();
+    let jsonData;
+    try {
+      jsonData = JSON.parse(data);
+    } catch (e) {
+      jsonData = { message: data };
+    }
+
+    return new Response(JSON.stringify(jsonData), {
       status: response.status,
       headers: { 
         'Content-Type': 'application/json',

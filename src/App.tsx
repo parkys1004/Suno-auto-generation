@@ -71,6 +71,34 @@ export default function App() {
     return sanitized;
   };
 
+  const apiPost = async (url: string, data: any, config: any = {}) => {
+    try {
+      return await axios.post(url, data, config);
+    } catch (err: any) {
+      console.error(`API POST Error [${url}]:`, err.response?.status, err.response?.data || err.message);
+      if (err.response?.status === 405 && !url.endsWith('/')) {
+        console.log(`Retrying POST ${url} with trailing slash due to 405`);
+        return await axios.post(`${url}/`, data, config);
+      }
+      throw err;
+    }
+  };
+
+  const apiGet = async (url: string, config: any = {}) => {
+    try {
+      return await axios.get(url, config);
+    } catch (err: any) {
+      console.error(`API GET Error [${url}]:`, err.response?.status, err.response?.data || err.message);
+      if (err.response?.status === 405 && !url.split('?')[0].endsWith('/')) {
+        const [path, query] = url.split('?');
+        const newUrl = `${path}/${query ? `?${query}` : ''}`;
+        console.log(`Retrying GET ${url} with trailing slash due to 405`);
+        return await axios.get(newUrl, config);
+      }
+      throw err;
+    }
+  };
+
   const safeString = (val: any, fallback: string = ''): string => {
     if (typeof val === 'string') return val;
     if (typeof val === 'number' || typeof val === 'boolean') return String(val);
@@ -281,7 +309,7 @@ export default function App() {
     
     setIsGeneratingWav(prev => ({ ...prev, [song.id]: true }));
     try {
-      const response = await axios.post('/api/suno/wav/generate', {
+      const response = await apiPost('/api/suno/wav/generate', {
         apiKey,
         baseUrl,
         taskId: song.taskId || song.id,
@@ -449,7 +477,7 @@ export default function App() {
         
         for (const currentTaskId of currentTaskIds) {
           try {
-            const response = await axios.get(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const response = await apiGet(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -571,7 +599,7 @@ export default function App() {
         for (const songId of taskIds) {
           const tId = wavPollingTasks[songId];
           try {
-            const response = await axios.get(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const response = await apiGet(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -925,7 +953,7 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await axios.post('/api/suno/generate', payload);
+        const response = await apiPost('/api/suno/generate', payload);
         
         console.log('Generate Response (From Prompt):', response.data);
 
@@ -1043,7 +1071,7 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await axios.post('/api/suno/generate', payload);
+        const response = await apiPost('/api/suno/generate', payload);
         
         console.log('Generate Response (Direct):', response.data);
 
@@ -1136,7 +1164,7 @@ export default function App() {
             callBackUrl: "https://example.com/callback"
           };
 
-          const response = await axios.post('/api/suno/generate', payload);
+          const response = await apiPost('/api/suno/generate', payload);
           
           if (response.data?.code === 200 && response.data?.data?.taskId) {
             const taskId = response.data.data.taskId;
