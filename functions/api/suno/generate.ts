@@ -1,5 +1,23 @@
-export const onRequestPost = async (context: any) => {
+export const onRequest = async (context: any) => {
   const { request } = context;
+  
+  // Handle CORS preflight
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    });
+  }
+
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   
   try {
     const body: any = await request.json();
@@ -14,6 +32,7 @@ export const onRequestPost = async (context: any) => {
 
     let apiUrl = baseUrl || 'https://api.sunoapi.org/api/v1';
     
+    // API URL normalization
     if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
       apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
     }
@@ -62,14 +81,4 @@ export const onRequestPost = async (context: any) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
-
-export const onRequestOptions = async () => {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
 };

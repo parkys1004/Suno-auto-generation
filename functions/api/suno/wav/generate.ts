@@ -1,5 +1,22 @@
-export const onRequestPost = async (context: any) => {
+export const onRequest = async (context: any) => {
   const { request } = context;
+  
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    });
+  }
+
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   
   try {
     const body: any = await request.json();
@@ -53,14 +70,4 @@ export const onRequestPost = async (context: any) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
-
-export const onRequestOptions = async () => {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
 };

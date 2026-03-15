@@ -1,6 +1,23 @@
-export const onRequestGet = async (context: any) => {
+export const onRequest = async (context: any) => {
   const { request, params } = context;
   const id = params.id;
+  
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
+    });
+  }
+
+  if (request.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
   
   const url = new URL(request.url);
   const baseUrl = url.searchParams.get('baseUrl');
@@ -25,7 +42,6 @@ export const onRequestGet = async (context: any) => {
     apiUrl = apiUrl.slice(0, -1);
   }
 
-  // Try the most common status endpoint first
   const statusUrl = `${apiUrl}/generate/record-info?taskId=${id}`;
   
   try {
@@ -56,14 +72,4 @@ export const onRequestGet = async (context: any) => {
       headers: { 'Content-Type': 'application/json' }
     });
   }
-};
-
-export const onRequestOptions = async () => {
-  return new Response(null, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    },
-  });
 };
