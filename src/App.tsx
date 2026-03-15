@@ -62,7 +62,9 @@ export default function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('suno_api_key') || '');
+  const sanitizeKey = (key: string | null) => key ? key.replace(/[^\x20-\x7E]/g, '').trim() : '';
+
+  const [apiKey, setApiKey] = useState(() => sanitizeKey(localStorage.getItem('suno_api_key')));
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('suno_base_url') || 'https://api.sunoapi.org/api/v1');
   
   // Form States
@@ -204,8 +206,8 @@ export default function App() {
   // API Settings Modal State
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
   const [promptModel, setPromptModel] = useState<'chatgpt' | 'gemini'>(() => localStorage.getItem('prompt_model') as 'chatgpt' | 'gemini' || 'gemini');
-  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
-  const [chatgptApiKey, setChatgptApiKey] = useState(() => localStorage.getItem('chatgpt_api_key') || '');
+  const [geminiApiKey, setGeminiApiKey] = useState(() => sanitizeKey(localStorage.getItem('gemini_api_key')));
+  const [chatgptApiKey, setChatgptApiKey] = useState(() => sanitizeKey(localStorage.getItem('chatgpt_api_key')));
 
 
 
