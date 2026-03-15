@@ -64,6 +64,33 @@ export default function App() {
 
   const sanitizeKey = (key: string | null) => key ? key.replace(/[^\x20-\x7E]/g, '').trim() : '';
 
+  const safeString = (val: any, fallback: string = ''): string => {
+    if (typeof val === 'string') return val;
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+    if (val === null || val === undefined) return fallback;
+    
+    // If it's an object, try to find a string property
+    if (typeof val === 'object') {
+      if (typeof val.label === 'string') return val.label;
+      if (typeof val.name === 'string') return val.name;
+      if (typeof val.text === 'string') return val.text;
+      if (typeof val.value === 'string') return val.value;
+      
+      // If label/name/text/value exist but are not strings, recurse or stringify
+      if (val.label) return safeString(val.label, fallback);
+      if (val.name) return safeString(val.name, fallback);
+      if (val.text) return safeString(val.text, fallback);
+      if (val.value) return safeString(val.value, fallback);
+    }
+    
+    try {
+      const stringified = JSON.stringify(val);
+      return stringified === '{}' ? fallback : stringified;
+    } catch (e) {
+      return fallback;
+    }
+  };
+
   const [apiKey, setApiKey] = useState(() => sanitizeKey(localStorage.getItem('suno_api_key')));
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('suno_base_url') || 'https://api.sunoapi.org/api/v1');
   
@@ -241,43 +268,20 @@ export default function App() {
     }
   };
 
-  const getApiUrl = () => {
-    let apiUrl = baseUrl || 'https://api.sunoapi.org/api/v1';
-    
-    if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
-      apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
-    }
-    if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
-      apiUrl = 'https://api.sunoapi.org/api/v1';
-    }
-    if (apiUrl.endsWith('/')) {
-      apiUrl = apiUrl.slice(0, -1);
-    }
-    return apiUrl;
-  };
-
   const handleGenerateWav = async (song: Song, e: React.MouseEvent) => {
     e.preventDefault();
     if (!song.id) return;
     
     setIsGeneratingWav(prev => ({ ...prev, [song.id]: true }));
     try {
-      const apiUrl = getApiUrl();
-      const response = await axios.post(`${apiUrl}/wav/generate`, {
+      const response = await axios.post('/api/suno/wav/generate', {
+        apiKey,
+        baseUrl,
         taskId: song.taskId || song.id,
         audioId: song.id,
         callBackUrl: ''
-      }, {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        }
       });
       
-      if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-        throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
-      }
-
       if (response.data) {
         alert('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
         setWavPollingTasks(prev => ({ ...prev, [song.id]: song.taskId || song.id }));
@@ -429,16 +433,10 @@ export default function App() {
       intervalId = setInterval(async () => {
         for (const currentTaskId of taskIds) {
           try {
-            const apiUrl = getApiUrl();
-            const response = await axios.get(`${apiUrl}/status/${currentTaskId}`, {
+            const response = await axios.get(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
-            if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-              console.error('API 서버에 연결할 수 없습니다.');
-              continue;
-            }
-
             let data = response.data;
             if (data && data.code === 200) {
               data = data.data;
@@ -534,16 +532,10 @@ export default function App() {
         for (const songId of taskIds) {
           const tId = wavPollingTasks[songId];
           try {
-            const apiUrl = getApiUrl();
-            const response = await axios.get(`${apiUrl}/status/${tId}`, {
+            const response = await axios.get(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
-            if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-              console.error('API 서버에 연결할 수 없습니다.');
-              continue;
-            }
-
             let data = response.data;
             if (data && data.code === 200) {
               data = data.data;
@@ -652,12 +644,6 @@ export default function App() {
           }
         });
         const data = JSON.parse(response.text || '{}');
-        const safeString = (val: any, fallback: string): string => {
-          if (typeof val === 'string') return val;
-          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-          if (val === null || val === undefined) return fallback;
-          return val.label || val.name || JSON.stringify(val);
-        };
         title = safeString(data.title, '제목 없음');
         lyrics = safeString(data.lyrics, '가사 없음');
         style_prompt = safeString(data.style_prompt, allTags);
@@ -676,12 +662,6 @@ export default function App() {
         });
         const data = await response.json();
         const parsed = JSON.parse(data.choices[0].message.content);
-        const safeString = (val: any, fallback: string): string => {
-          if (typeof val === 'string') return val;
-          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-          if (val === null || val === undefined) return fallback;
-          return val.label || val.name || JSON.stringify(val);
-        };
         title = safeString(parsed.title, '제목 없음');
         lyrics = safeString(parsed.lyrics, '가사 없음');
         style_prompt = safeString(parsed.style_prompt, allTags);
@@ -780,20 +760,13 @@ export default function App() {
       }
 
       if (data) {
-        const safeString = (val: any): string => {
-          if (typeof val === 'string') return val;
-          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
-          if (val === null || val === undefined) return '';
-          return val.label || val.name || JSON.stringify(val);
-        };
-        
         if (Array.isArray(data.genres)) setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.subGenres)) setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.moods)) setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
         if (Array.isArray(data.instruments)) setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: safeString(i) })));
         if (Array.isArray(data.vocalGenders)) setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.vocalTypes)) setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: safeString(v) })));
-        if (data.musicType) setMusicType(String(data.musicType));
+        if (data.musicType) setMusicType(String(data.musicType).toLowerCase() as any);
         if (data.tempo) setTempo(Number(data.tempo) || 80);
         if (data.mainLanguage) setMainLanguage(String(data.mainLanguage));
         if (data.lyricsLengthWithSpaces) setLyricsLengthWithSpaces(Number(data.lyricsLengthWithSpaces) || 800);
@@ -896,13 +869,14 @@ export default function App() {
         // Add request number to the title for clarity
         const requestTitle = promptToUse.title;
 
-        const apiUrl = getApiUrl();
         const payload = {
+          apiKey,
+          baseUrl,
           customMode: true,
-          instrumental: musicType === 'instrumental',
+          make_instrumental: musicType === 'instrumental',
           model: model || "V4_5ALL",
           prompt: promptToUse.lyrics || "",
-          style: promptToUse.style_prompt || promptToUse.tags || "",
+          tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: requestTitle || "",
           negativeTags: excludedElements.map(t => t.label).join(', ') || "",
           vocalGender: gender || "",
@@ -912,17 +886,8 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await axios.post(`${apiUrl}/generate`, payload, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await axios.post('/api/suno/generate', payload);
         
-        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
-        }
-
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           setTaskIds(prev => [...prev, response.data.data.taskId]);
         } else if (response.data?.code && response.data.code !== 200) {
@@ -1013,13 +978,14 @@ export default function App() {
         // Ensure we stay on the music tab
         setLibraryTab('music');
 
-        const apiUrl = getApiUrl();
         const payload = {
+          apiKey,
+          baseUrl,
           customMode: true,
-          instrumental: musicType === 'instrumental',
+          make_instrumental: musicType === 'instrumental',
           model: model || "V4_5ALL",
           prompt: promptToUse.lyrics || "",
-          style: promptToUse.style_prompt || promptToUse.tags || "",
+          tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: requestTitle || "",
           negativeTags: excludedElements.map(t => t.label).join(', ') || "",
           vocalGender: gender || "",
@@ -1029,17 +995,8 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await axios.post(`${apiUrl}/generate`, payload, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await axios.post('/api/suno/generate', payload);
         
-        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
-        }
-
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           setTaskIds(prev => [...prev, response.data.data.taskId]);
         } else if (response.data?.code && response.data.code !== 200) {
@@ -1103,13 +1060,14 @@ export default function App() {
           gender = 'm';
         }
 
-        const apiUrl = getApiUrl();
         const payload = {
+          apiKey,
+          baseUrl,
           customMode: true,
-          instrumental: musicType === 'instrumental',
+          make_instrumental: musicType === 'instrumental',
           model: model || "V4_5ALL",
           prompt: promptToUse.lyrics || "",
-          style: promptToUse.style_prompt || promptToUse.tags || "",
+          tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: promptToUse.title || "",
           negativeTags: excludedElements.map(t => t.label).join(', ') || "",
           vocalGender: gender || "",
@@ -1119,17 +1077,8 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await axios.post(`${apiUrl}/generate`, payload, {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-          }
-        });
+        const response = await axios.post('/api/suno/generate', payload);
         
-        if (typeof response.data === 'string' && response.data.includes('<!DOCTYPE html>')) {
-          throw new Error('API 서버에 연결할 수 없습니다. Vercel 배포 환경에서는 API 서버가 실행되지 않습니다.');
-        }
-
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           newTaskIds.push(response.data.data.taskId);
         } else if (response.data?.code && response.data.code !== 200) {

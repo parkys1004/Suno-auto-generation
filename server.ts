@@ -8,10 +8,13 @@ async function startServer() {
 
   app.use(express.json());
 
+  const sanitizeKey = (key: string | null) => key ? key.replace(/[^\x20-\x7E]/g, '').trim() : '';
+
   // API route to proxy requests to Suno API
   app.post('/api/suno/generate', async (req, res) => {
     try {
-      const { apiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
+      const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
+      const apiKey = sanitizeKey(rawApiKey);
 
       if (!apiKey) {
         return res.status(400).json({ error: 'API Key is required' });
@@ -68,7 +71,8 @@ async function startServer() {
 
   app.post('/api/suno/wav/generate', async (req, res) => {
     try {
-      const { apiKey, baseUrl, taskId, audioId, callBackUrl } = req.body;
+      const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = req.body;
+      const apiKey = sanitizeKey(rawApiKey);
 
       if (!apiKey) {
         return res.status(400).json({ error: 'API Key is required' });
@@ -117,7 +121,7 @@ async function startServer() {
   app.get('/api/suno/status/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      const apiKey = req.headers.authorization?.split(' ')[1];
+      const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
       let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
 
       if (!apiKey) {
