@@ -431,72 +431,97 @@ export default function App() {
     let intervalId: NodeJS.Timeout;
     if (taskIds.length > 0 && isGenerating) {
       intervalId = setInterval(async () => {
-        for (const currentTaskId of taskIds) {
+        // Use a copy to avoid issues with concurrent updates
+        const currentTaskIds = [...taskIds];
+        
+        for (const currentTaskId of currentTaskIds) {
           try {
             const response = await axios.get(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
             let data = response.data;
-            if (data && data.code === 200) {
+            console.log(`Status for ${currentTaskId}:`, data);
+
+            // Handle common wrapper formats
+            if (data && data.code === 200 && data.data) {
               data = data.data;
             }
             
             if (data) {
-              const status = data.status;
-              const sunoData = data.response?.sunoData || [];
-              
-              if (status === 'SUCCESS' || status === 'FIRST_SUCCESS' || status === 'TEXT_SUCCESS') {
-                setSongs(prev => {
-                  const updated = [...prev];
-                  // Only take the first 2 songs as requested by the user
-                  sunoData.slice(0, 2).forEach((newSong: any) => {
-                    const mappedSong: Song = {
-                      id: newSong.id,
-                      title: newSong.title,
-                      image_url: newSong.imageUrl,
-                      lyric: newSong.prompt,
-                      audio_url: newSong.audioUrl,
-                      video_url: '',
-                      created_at: newSong.createTime,
-                      model_name: newSong.modelName,
-                      status: status === 'SUCCESS' ? 'complete' : 'streaming',
-                      tags: newSong.tags,
-                      duration: newSong.duration?.toString(),
-                      taskId: currentTaskId
-                    };
-                    const idx = updated.findIndex(s => s.id === mappedSong.id);
-                    if (idx !== -1) updated[idx] = mappedSong;
-                    else updated.unshift(mappedSong);
-                  });
-                  return updated;
-                });
+              // Handle case where data is an array of songs directly
+              let sunoData: any[] = [];
+              let status = '';
+              let errorMessage = '';
+
+              if (Array.isArray(data)) {
+                sunoData = data;
+                // If it's an array, we assume it's successful if we have data
+                status = sunoData.every(s => s.status === 'complete' || s.audio_url) ? 'SUCCESS' : 'PROCESSING';
+              } else {
+                status = data.status || '';
+                errorMessage = data.errorMessage || data.error || '';
+                sunoData = data.response?.sunoData || data.data || (Array.isArray(data.songs) ? data.songs : []);
                 
-                if (status === 'SUCCESS') {
+                // If sunoData is still empty, maybe the object itself is the song
+                if (sunoData.length === 0 && (data.id || data.audio_url)) {
+                  sunoData = [data];
+                }
+              }
+              
+              const isSuccess = status === 'SUCCESS' || status === 'complete' || status === 'COMPLETED' || status === 'FINISHED' || 
+                               status === 'FIRST_SUCCESS' || status === 'TEXT_SUCCESS' ||
+                               (sunoData.length > 0 && sunoData.every(s => s.audio_url || s.status === 'complete'));
+
+              if (isSuccess || status === 'PROCESSING' || status === 'streaming' || status === 'QUEUED') {
+                if (sunoData.length > 0) {
+                  setSongs(prev => {
+                    const updated = [...prev];
+                    sunoData.forEach((newSong: any) => {
+                      const mappedSong: Song = {
+                        id: newSong.id || newSong.song_id || currentTaskId,
+                        title: newSong.title || 'Untitled',
+                        image_url: newSong.imageUrl || newSong.image_url || '',
+                        lyric: newSong.prompt || newSong.lyric || '',
+                        audio_url: newSong.audioUrl || newSong.audio_url || '',
+                        video_url: newSong.videoUrl || newSong.video_url || '',
+                        created_at: newSong.createTime || newSong.created_at || new Date().toISOString(),
+                        model_name: newSong.modelName || newSong.model || '',
+                        status: (isSuccess && status !== 'streaming') ? 'complete' : 'streaming',
+                        tags: newSong.tags || '',
+                        duration: newSong.duration?.toString() || '',
+                        taskId: currentTaskId
+                      };
+                      const idx = updated.findIndex(s => s.id === mappedSong.id);
+                      if (idx !== -1) updated[idx] = mappedSong;
+                      else updated.unshift(mappedSong);
+                    });
+                    return updated;
+                  });
+                }
+                
+                if (isSuccess && status !== 'streaming') {
                   setTaskIds(prev => {
                     const newIds = prev.filter(id => id !== currentTaskId);
                     if (newIds.length === 0 && !isRequesting) setIsGenerating(false);
                     return newIds;
                   });
                   
-                  // Automatically download if directory handle is available
-                  if (dirHandle) {
+                  // Auto-download logic...
+                  if (dirHandle && sunoData.length > 0) {
                     sunoData.forEach(async (newSong: any) => {
-                      if (newSong.audioUrl) {
+                      const audioUrl = newSong.audioUrl || newSong.audio_url;
+                      if (audioUrl) {
                         try {
-                          const response = await fetch(newSong.audioUrl);
+                          const response = await fetch(audioUrl);
                           if (!response.ok) throw new Error('Network response was not ok');
                           const blob = await response.blob();
-                          
                           const safeTitle = (newSong.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
                           const fileName = `${safeTitle}.mp3`;
-                          
                           const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
                           const writable = await fileHandle.createWritable();
                           await writable.write(blob);
                           await writable.close();
-                          
-                          console.log(`Auto-downloaded: ${fileName}`);
                         } catch (err) {
                           console.error('Auto-download failed:', err);
                         }
@@ -504,8 +529,8 @@ export default function App() {
                     });
                   }
                 }
-              } else if (status === 'CREATE_TASK_FAILED' || status === 'GENERATE_AUDIO_FAILED' || status === 'CALLBACK_EXCEPTION' || status === 'SENSITIVE_WORD_ERROR') {
-                setError(prev => prev ? `${prev}\n음악 생성 중 오류가 발생했습니다: ${data.errorMessage || status}` : `음악 생성 중 오류가 발생했습니다: ${data.errorMessage || status}`);
+              } else if (status === 'FAILED' || status === 'ERROR' || status.includes('FAILED') || status.includes('ERROR')) {
+                setError(prev => prev ? `${prev}\n오류: ${errorMessage || status}` : `오류: ${errorMessage || status}`);
                 setTaskIds(prev => {
                   const newIds = prev.filter(id => id !== currentTaskId);
                   if (newIds.length === 0 && !isRequesting) setIsGenerating(false);
@@ -520,7 +545,7 @@ export default function App() {
       }, 5000);
     }
     return () => { if (intervalId) clearInterval(intervalId); };
-  }, [taskIds, isGenerating, apiKey, baseUrl]);
+  }, [taskIds, isGenerating, apiKey, baseUrl, isRequesting, dirHandle]);
 
   // WAV Polling logic
   useEffect(() => {
@@ -888,17 +913,24 @@ export default function App() {
 
         const response = await axios.post('/api/suno/generate', payload);
         
+        console.log('Generate Response (From Prompt):', response.data);
+
         if (response.data?.code === 200 && response.data?.data?.taskId) {
-          setTaskIds(prev => [...prev, response.data.data.taskId]);
+          const taskId = response.data.data.taskId;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
           setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => s.id).join(',');
-          setTaskIds(prev => [...prev, ids]);
+          const ids = slicedData.map((s: any) => s.id);
+          setTaskIds(prev => [...prev, ...ids]);
         } else if (response.data && response.data.task_id) {
-          setTaskIds(prev => [...prev, response.data.task_id]);
+          const taskId = response.data.task_id;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+        } else if (response.data && response.data.taskId) {
+          const taskId = response.data.taskId;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
         }
 
         // Add a small delay between requests if genCount > 1
@@ -997,17 +1029,24 @@ export default function App() {
 
         const response = await axios.post('/api/suno/generate', payload);
         
+        console.log('Generate Response (Direct):', response.data);
+
         if (response.data?.code === 200 && response.data?.data?.taskId) {
-          setTaskIds(prev => [...prev, response.data.data.taskId]);
+          const taskId = response.data.data.taskId;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
           setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => s.id).join(',');
-          setTaskIds(prev => [...prev, ids]);
+          const ids = slicedData.map((s: any) => s.id);
+          setTaskIds(prev => [...prev, ...ids]);
         } else if (response.data && response.data.task_id) {
-          setTaskIds(prev => [...prev, response.data.task_id]);
+          const taskId = response.data.task_id;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+        } else if (response.data && response.data.taskId) {
+          const taskId = response.data.taskId;
+          setTaskIds(prev => [...prev, ...taskId.split(',')]);
         }
 
         // Add a small delay between requests if genCount > 1
