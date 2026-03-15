@@ -145,7 +145,10 @@ export function SettingsModal({
                     type="password"
                     value={promptModel === 'gemini' ? geminiApiKey : chatgptApiKey}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      if (val.toLowerCase().startsWith('bearer ')) {
+                        val = val.slice(7).trim();
+                      }
                       if (promptModel === 'gemini') {
                         setGeminiApiKey(val);
                         setGeminiTestStatus('idle');
@@ -192,7 +195,10 @@ export function SettingsModal({
                     type="password"
                     value={apiKey}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      if (val.toLowerCase().startsWith('bearer ')) {
+                        val = val.slice(7).trim();
+                      }
                       setApiKey(val);
                       setSunoTestStatus('idle');
                     }}

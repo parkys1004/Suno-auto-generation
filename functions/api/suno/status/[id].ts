@@ -23,7 +23,18 @@ export const onRequest = async (context: any) => {
   const baseUrl = url.searchParams.get('baseUrl');
   const authHeader = request.headers.get('Authorization');
 
-  if (!authHeader) {
+  const sanitizeKey = (key: string | null) => {
+    if (!key) return '';
+    let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    if (sanitized.toLowerCase().startsWith('bearer ')) {
+      sanitized = sanitized.slice(7).trim();
+    }
+    return sanitized;
+  };
+
+  const apiKey = sanitizeKey(authHeader?.split(' ')[1] || null);
+
+  if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Authorization header is required' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
@@ -45,17 +56,23 @@ export const onRequest = async (context: any) => {
   const statusUrl = `${apiUrl}/generate/record-info?taskId=${id}`;
   
   try {
-    let response = await fetch(statusUrl, {
-      method: 'GET',
-      headers: { 'Authorization': authHeader }
-    });
+    const performRequest = async (url: string) => {
+      return await fetch(url, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${apiKey}` }
+      });
+    };
+
+    let response = await performRequest(statusUrl);
 
     if (response.status === 404 || response.status === 405) {
       const fallbackUrl = `${apiUrl}/status/${id}`;
-      response = await fetch(fallbackUrl, {
-        method: 'GET',
-        headers: { 'Authorization': authHeader }
-      });
+      response = await performRequest(fallbackUrl);
+    }
+    
+    // One more try with trailing slash if still 405
+    if (response.status === 405) {
+      response = await performRequest(`${apiUrl}/generate/record-info/?taskId=${id}`);
     }
 
     const data = await response.json();

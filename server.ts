@@ -21,10 +21,17 @@ async function startServer() {
     next();
   });
 
-  const sanitizeKey = (key: string | null) => key ? key.replace(/[^\x20-\x7E]/g, '').trim() : '';
+  const sanitizeKey = (key: string | null) => {
+    if (!key) return '';
+    let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    if (sanitized.toLowerCase().startsWith('bearer ')) {
+      sanitized = sanitized.slice(7).trim();
+    }
+    return sanitized;
+  };
 
   // API route to proxy requests to Suno API
-  app.post('/api/suno/generate', async (req, res) => {
+  app.post(['/api/suno/generate', '/api/suno/generate/'], async (req, res) => {
     try {
       const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
       const apiKey = sanitizeKey(rawApiKey);
@@ -61,18 +68,34 @@ async function startServer() {
         callBackUrl: "https://example.com/callback"
       };
 
-      console.log(`Proxying generate to: ${apiUrl}/generate`);
-      const response = await axios.post(
-        `${apiUrl}/generate`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 30000
-        }
-      );
+      const performRequest = async (url: string) => {
+        console.log(`Proxying generate to: ${url}`);
+        return await axios.post(
+          url,
+          payload,
+          {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000,
+            validateStatus: (status) => status < 500 // Don't throw on 4xx
+          }
+        );
+      };
+
+      let response = await performRequest(`${apiUrl}/generate`);
+      
+      // If 405 Method Not Allowed, try with trailing slash
+      if (response.status === 405) {
+        console.log('Received 405, retrying with trailing slash...');
+        response = await performRequest(`${apiUrl}/generate/`);
+      }
+
+      // If still error, return it
+      if (response.status >= 400) {
+        return res.status(response.status).json(response.data);
+      }
 
       res.json(response.data);
     } catch (error: any) {
@@ -86,7 +109,7 @@ async function startServer() {
     }
   });
 
-  app.post('/api/suno/wav/generate', async (req, res) => {
+  app.post(['/api/suno/wav/generate', '/api/suno/wav/generate/'], async (req, res) => {
     try {
       const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = req.body;
       const apiKey = sanitizeKey(rawApiKey);
@@ -113,18 +136,32 @@ async function startServer() {
         callBackUrl: callBackUrl || 'https://example.com/callback'
       };
 
-      console.log(`Proxying WAV generate to: ${apiUrl}/wav/generate`);
-      const response = await axios.post(
-        `${apiUrl}/wav/generate`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          timeout: 30000
-        }
-      );
+      const performRequest = async (url: string) => {
+        console.log(`Proxying WAV generate to: ${url}`);
+        return await axios.post(
+          url,
+          payload,
+          {
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 30000,
+            validateStatus: (status) => status < 500
+          }
+        );
+      };
+
+      let response = await performRequest(`${apiUrl}/wav/generate`);
+      
+      if (response.status === 405) {
+        console.log('Received 405, retrying with trailing slash...');
+        response = await performRequest(`${apiUrl}/wav/generate/`);
+      }
+
+      if (response.status >= 400) {
+        return res.status(response.status).json(response.data);
+      }
 
       res.json(response.data);
     } catch (error: any) {
@@ -138,7 +175,7 @@ async function startServer() {
     }
   });
 
-  app.get('/api/suno/status/:id', async (req, res) => {
+  app.get(['/api/suno/status/:id', '/api/suno/status/:id/'], async (req, res) => {
     try {
       const { id } = req.params;
       const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);

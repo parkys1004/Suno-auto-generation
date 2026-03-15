@@ -21,7 +21,18 @@ export const onRequest = async (context: any) => {
   
   try {
     const body: any = await request.json();
-    const { apiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = body;
+    const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = body;
+
+    const sanitizeKey = (key: string | null) => {
+      if (!key) return '';
+      let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+      if (sanitized.toLowerCase().startsWith('bearer ')) {
+        sanitized = sanitized.slice(7).trim();
+      }
+      return sanitized;
+    };
+
+    const apiKey = sanitizeKey(rawApiKey);
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: 'API Key is required' }), {
@@ -58,14 +69,22 @@ export const onRequest = async (context: any) => {
       callBackUrl: "https://example.com/callback"
     };
 
-    const response = await fetch(`${apiUrl}/generate`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload)
-    });
+    const performRequest = async (url: string) => {
+      return await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload)
+      });
+    };
+
+    let response = await performRequest(`${apiUrl}/generate`);
+    
+    if (response.status === 405) {
+      response = await performRequest(`${apiUrl}/generate/`);
+    }
 
     const data = await response.json();
     return new Response(JSON.stringify(data), {

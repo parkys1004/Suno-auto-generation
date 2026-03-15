@@ -62,7 +62,14 @@ export default function App() {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
   };
 
-  const sanitizeKey = (key: string | null) => key ? key.replace(/[^\x20-\x7E]/g, '').trim() : '';
+  const sanitizeKey = (key: string | null) => {
+    if (!key) return '';
+    let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    if (sanitized.toLowerCase().startsWith('bearer ')) {
+      sanitized = sanitized.slice(7).trim();
+    }
+    return sanitized;
+  };
 
   const safeString = (val: any, fallback: string = ''): string => {
     if (typeof val === 'string') return val;
@@ -926,7 +933,9 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
-          setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
+          const msg = response.data.message || response.data.error || '';
+          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+          setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
@@ -1042,7 +1051,9 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
-          setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
+          const msg = response.data.message || response.data.error || '';
+          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+          setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
@@ -1132,7 +1143,9 @@ export default function App() {
             newTaskIds.push(taskId);
             setTaskIds(prev => [...prev, ...taskId.split(',')]);
           } else if (response.data?.code && response.data.code !== 200) {
-            setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
+            const msg = response.data.message || response.data.error || '';
+            const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+            setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
             hasError = true;
           } else if (Array.isArray(response.data) && response.data.length > 0) {
             const slicedData = response.data.slice(0, 2);
