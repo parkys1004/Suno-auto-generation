@@ -426,6 +426,12 @@ export default function App() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  useEffect(() => {
+    if (!isRequesting && taskIds.length === 0 && isGenerating) {
+      setIsGenerating(false);
+    }
+  }, [isRequesting, taskIds, isGenerating]);
+
   // Polling logic
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -469,17 +475,18 @@ export default function App() {
                 }
               }
               
+              const isError = status === 'FAILED' || status === 'ERROR' || status === 'error' || errorMessage;
               const isSuccess = status === 'SUCCESS' || status === 'complete' || status === 'COMPLETED' || status === 'FINISHED' || 
                                status === 'FIRST_SUCCESS' || status === 'TEXT_SUCCESS' ||
                                (sunoData.length > 0 && sunoData.every(s => s.audio_url || s.status === 'complete'));
 
-              if (isSuccess || status === 'PROCESSING' || status === 'streaming' || status === 'QUEUED') {
+              if (isSuccess || isError || status === 'PROCESSING' || status === 'streaming' || status === 'QUEUED') {
                 if (sunoData.length > 0) {
                   setSongs(prev => {
                     const updated = [...prev];
-                    sunoData.forEach((newSong: any) => {
+                    sunoData.forEach((newSong: any, index: number) => {
                       const mappedSong: Song = {
-                        id: newSong.id || newSong.song_id || currentTaskId,
+                        id: newSong.id || newSong.song_id || (sunoData.length > 1 ? `${currentTaskId}_${index}` : currentTaskId),
                         title: newSong.title || 'Untitled',
                         image_url: newSong.imageUrl || newSong.image_url || '',
                         lyric: newSong.prompt || newSong.lyric || '',
@@ -487,7 +494,7 @@ export default function App() {
                         video_url: newSong.videoUrl || newSong.video_url || '',
                         created_at: newSong.createTime || newSong.created_at || new Date().toISOString(),
                         model_name: newSong.modelName || newSong.model || '',
-                        status: (isSuccess && status !== 'streaming') ? 'complete' : 'streaming',
+                        status: isError ? 'error' : (isSuccess && status !== 'streaming') ? 'complete' : 'streaming',
                         tags: newSong.tags || '',
                         duration: newSong.duration?.toString() || '',
                         taskId: currentTaskId
@@ -500,7 +507,7 @@ export default function App() {
                   });
                 }
                 
-                if (isSuccess && status !== 'streaming') {
+                if ((isSuccess || isError) && status !== 'streaming') {
                   setTaskIds(prev => {
                     const newIds = prev.filter(id => id !== currentTaskId);
                     if (newIds.length === 0 && !isRequesting) setIsGenerating(false);
@@ -1081,77 +1088,88 @@ export default function App() {
 
     setError('');
     setIsGenerating(true);
+    setIsRequesting(true);
     setGenerationProgress({ current: 0, total: promptsToGenerate.length });
     setLibraryTab('music');
     
     let newTaskIds: string[] = [];
     let hasError = false;
 
-    let currentIdx = 0;
-    for (const promptToUse of promptsToGenerate) {
-      currentIdx++;
-      setGenerationProgress(prev => ({ ...prev, current: currentIdx }));
-      try {
-        let gender = '';
-        if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
-          gender = 'f';
-        } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
-          gender = 'm';
+    try {
+      let currentIdx = 0;
+      for (const promptToUse of promptsToGenerate) {
+        currentIdx++;
+        setGenerationProgress(prev => ({ ...prev, current: currentIdx }));
+        try {
+          let gender = '';
+          if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+            gender = 'f';
+          } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+            gender = 'm';
+          }
+
+          const payload = {
+            apiKey,
+            baseUrl,
+            customMode: true,
+            make_instrumental: musicType === 'instrumental',
+            model: model || "V4_5ALL",
+            prompt: promptToUse.lyrics || "",
+            tags: promptToUse.style_prompt || promptToUse.tags || "",
+            title: promptToUse.title || "",
+            negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+            vocalGender: gender || "",
+            styleWeight: 0.65,
+            weirdnessConstraint: 0.65,
+            audioWeight: 0.65,
+            callBackUrl: "https://example.com/callback"
+          };
+
+          const response = await axios.post('/api/suno/generate', payload);
+          
+          if (response.data?.code === 200 && response.data?.data?.taskId) {
+            const taskId = response.data.data.taskId;
+            newTaskIds.push(taskId);
+            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          } else if (response.data?.code && response.data.code !== 200) {
+            setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
+            hasError = true;
+          } else if (Array.isArray(response.data) && response.data.length > 0) {
+            const slicedData = response.data.slice(0, 2);
+            setSongs(prev => [...slicedData, ...prev]);
+            const ids = slicedData.map((s: any) => s.id);
+            newTaskIds.push(ids.join(','));
+            setTaskIds(prev => [...prev, ...ids]);
+          } else if (response.data && response.data.task_id) {
+            const taskId = response.data.task_id;
+            newTaskIds.push(taskId);
+            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          } else if (response.data && response.data.taskId) {
+            const taskId = response.data.taskId;
+            newTaskIds.push(taskId);
+            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          } else {
+            setError(prev => prev ? `${prev}\n예상치 못한 응답 형식입니다.` : '예상치 못한 응답 형식입니다.');
+            hasError = true;
+          }
+        } catch (err: any) {
+          const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.';
+          setError(prev => prev ? `${prev}\n${errMsg}` : errMsg);
+          hasError = true;
         }
-
-        const payload = {
-          apiKey,
-          baseUrl,
-          customMode: true,
-          make_instrumental: musicType === 'instrumental',
-          model: model || "V4_5ALL",
-          prompt: promptToUse.lyrics || "",
-          tags: promptToUse.style_prompt || promptToUse.tags || "",
-          title: promptToUse.title || "",
-          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
-          vocalGender: gender || "",
-          styleWeight: 0.65,
-          weirdnessConstraint: 0.65,
-          audioWeight: 0.65,
-          callBackUrl: "https://example.com/callback"
-        };
-
-        const response = await axios.post('/api/suno/generate', payload);
         
-        if (response.data?.code === 200 && response.data?.data?.taskId) {
-          newTaskIds.push(response.data.data.taskId);
-        } else if (response.data?.code && response.data.code !== 200) {
-          setError(prev => prev ? `${prev}\nAPI Error: ${response.data.code}` : `API Error: ${response.data.code}`);
-          hasError = true;
-        } else if (Array.isArray(response.data) && response.data.length > 0) {
-          // Only take the first 2 songs as requested by the user
-          const slicedData = response.data.slice(0, 2);
-          setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => s.id).join(',');
-          newTaskIds.push(ids);
-        } else if (response.data && response.data.task_id) {
-          newTaskIds.push(response.data.task_id);
-        } else {
-          setError(prev => prev ? `${prev}\n예상치 못한 응답 형식입니다.` : '예상치 못한 응답 형식입니다.');
-          hasError = true;
+        // Add a small delay between requests to avoid rate limits
+        if (currentIdx < promptsToGenerate.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
         }
-      } catch (err: any) {
-        const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.';
-        setError(prev => prev ? `${prev}\n${errMsg}` : errMsg);
-        hasError = true;
       }
-      
-      // Add a small delay between requests to avoid rate limits
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    } finally {
+      setIsRequesting(false);
+      if (newTaskIds.length === 0 && hasError) {
+        setIsGenerating(false);
+      }
+      setSelectedPrompts(new Set());
     }
-
-    if (newTaskIds.length > 0) {
-      setTaskIds(prev => [...prev, ...newTaskIds]);
-    } else if (hasError) {
-      setIsGenerating(false);
-    }
-    
-    setSelectedPrompts(new Set());
   };
 
   const toggleFavorite = (id: string, e: React.MouseEvent) => {
@@ -1427,6 +1445,7 @@ export default function App() {
       <AnimatePresence>
         {isGenerating && (
           <motion.div
+            key="generation-overlay"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1473,6 +1492,7 @@ export default function App() {
       <AnimatePresence>
         {showScrollTop && (
           <motion.button
+            key="scroll-top-button"
             initial={{ opacity: 0, scale: 0.5, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.5, y: 20 }}
