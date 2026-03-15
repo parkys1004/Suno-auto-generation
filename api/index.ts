@@ -1,8 +1,10 @@
 import express from 'express';
 import axios from 'axios';
+import cors from 'cors';
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 // API route to proxy requests to Suno API
@@ -126,12 +128,16 @@ app.post(['/api/suno/wav/generate', '/suno/wav/generate'], async (req, res) => {
   }
 });
 
-app.get(['/api/suno/status/:taskId', '/suno/status/:taskId'], async (req, res) => {
+app.get(['/api/suno/status/:id', '/suno/status/:id'], async (req, res) => {
   try {
-    const { taskId } = req.params;
+    const { id } = req.params;
     const authHeader = req.headers.authorization;
     let apiUrl = (req.query.baseUrl as string) || 'https://api.sunoapi.org/api/v1';
     
+    if (!authHeader) {
+      return res.status(401).json({ error: 'Authorization header is required' });
+    }
+
     if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
       apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
     }
@@ -142,20 +148,25 @@ app.get(['/api/suno/status/:taskId', '/suno/status/:taskId'], async (req, res) =
       apiUrl = apiUrl.slice(0, -1);
     }
 
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header is required' });
-    }
-
-    const response = await axios.get(
-      `${apiUrl}/status/${taskId}`,
-      {
-        headers: {
-          'Authorization': authHeader
-        }
+    const statusUrl = `${apiUrl}/generate/record-info?taskId=${id}`;
+    
+    try {
+      const response = await axios.get(statusUrl, {
+        headers: { 'Authorization': authHeader },
+        timeout: 15000
+      });
+      return res.json(response.data);
+    } catch (innerError: any) {
+      if (innerError.response?.status === 404 || innerError.response?.status === 405) {
+        const fallbackUrl = `${apiUrl}/status/${id}`;
+        const fallbackResponse = await axios.get(fallbackUrl, {
+          headers: { 'Authorization': authHeader },
+          timeout: 15000
+        });
+        return res.json(fallbackResponse.data);
       }
-    );
-
-    res.json(response.data);
+      throw innerError;
+    }
   } catch (error: any) {
     console.error('Suno Status API Error:', error.response?.data || error.message);
     res.status(error.response?.status || 500).json({
