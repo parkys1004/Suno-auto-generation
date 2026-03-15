@@ -72,30 +72,59 @@ export default function App() {
   };
 
   const apiPost = async (url: string, data: any, config: any = {}) => {
+    const targetUrl = url.startsWith('http') ? url : (url.startsWith('/') ? url : `/${url}`);
     try {
-      return await axios.post(url, data, config);
+      return await axios.post(targetUrl, data, config);
     } catch (err: any) {
-      console.error(`API POST Error [${url}]:`, err.response?.status, err.response?.data || err.message);
-      if (err.response?.status === 405 && !url.endsWith('/')) {
-        console.log(`Retrying POST ${url} with trailing slash due to 405`);
-        return await axios.post(`${url}/`, data, config);
+      const status = err.response?.status;
+      console.error(`API POST Error [${targetUrl}]:`, status, err.response?.data || err.message);
+      
+      if (status === 405 && !targetUrl.endsWith('/')) {
+        const retryUrl = `${targetUrl}/`;
+        console.log(`Retrying POST ${targetUrl} as ${retryUrl} due to 405`);
+        return await axios.post(retryUrl, data, config);
       }
       throw err;
     }
   };
 
   const apiGet = async (url: string, config: any = {}) => {
+    const targetUrl = url.startsWith('http') ? url : (url.startsWith('/') ? url : `/${url}`);
     try {
-      return await axios.get(url, config);
+      return await axios.get(targetUrl, config);
     } catch (err: any) {
-      console.error(`API GET Error [${url}]:`, err.response?.status, err.response?.data || err.message);
-      if (err.response?.status === 405 && !url.split('?')[0].endsWith('/')) {
-        const [path, query] = url.split('?');
-        const newUrl = `${path}/${query ? `?${query}` : ''}`;
-        console.log(`Retrying GET ${url} with trailing slash due to 405`);
-        return await axios.get(newUrl, config);
+      const status = err.response?.status;
+      console.error(`API GET Error [${targetUrl}]:`, status, err.response?.data || err.message);
+      
+      if (status === 405 && !targetUrl.split('?')[0].endsWith('/')) {
+        const [path, query] = targetUrl.split('?');
+        const retryUrl = `${path}/${query ? `?${query}` : ''}`;
+        console.log(`Retrying GET ${targetUrl} as ${retryUrl} due to 405`);
+        return await axios.get(retryUrl, config);
       }
       throw err;
+    }
+  };
+
+  const parseJsonSafe = (text: string) => {
+    if (!text) return {};
+    try {
+      // Remove potential markdown code blocks
+      let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
+      
+      // Try to find the first { and last } to extract the JSON object
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      
+      if (start !== -1 && end !== -1 && end > start) {
+        cleaned = cleaned.substring(start, end + 1);
+      }
+      
+      return JSON.parse(cleaned);
+    } catch (err) {
+      console.error('JSON Parse Error:', err, 'Original text:', text);
+      // If it's a simple string that failed, try to return it as a message
+      return { error: 'JSON parsing failed', originalText: text };
     }
   };
 
@@ -710,7 +739,7 @@ export default function App() {
             responseMimeType: 'application/json',
           }
         });
-        const data = JSON.parse(response.text || '{}');
+        const data = parseJsonSafe(response.text || '{}');
         title = safeString(data.title, '제목 없음');
         lyrics = safeString(data.lyrics, '가사 없음');
         style_prompt = safeString(data.style_prompt, allTags);
@@ -728,7 +757,7 @@ export default function App() {
           })
         });
         const data = await response.json();
-        const parsed = JSON.parse(data.choices[0].message.content);
+        const parsed = parseJsonSafe(data.choices[0].message.content);
         title = safeString(parsed.title, '제목 없음');
         lyrics = safeString(parsed.lyrics, '가사 없음');
         style_prompt = safeString(parsed.style_prompt, allTags);
@@ -808,7 +837,7 @@ export default function App() {
             responseMimeType: 'application/json',
           }
         });
-        data = JSON.parse(response.text || '{}');
+        data = parseJsonSafe(response.text || '{}');
       } else {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -823,7 +852,7 @@ export default function App() {
           })
         });
         const resData = await response.json();
-        data = JSON.parse(resData.choices[0].message.content);
+        data = parseJsonSafe(resData.choices[0].message.content);
       }
 
       if (data) {

@@ -67,15 +67,20 @@ export function SettingsModal({
     if (!apiKey) return;
     setSunoTestStatus('testing');
     try {
-      await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
+      // Use the same robustness as the main app
+      const response = await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
       setSunoTestStatus('success');
     } catch (e: any) {
+      // If it's a 405, it might be a trailing slash issue, but for a test we can be simpler
       if (e.response?.status === 401) {
         setSunoTestStatus('error');
-      } else {
+      } else if (e.response?.status === 404 || e.response?.status === 405) {
+        // Some APIs return 404/405 for a 'test' ID, but if we got a response it means the proxy is working
         setSunoTestStatus('success');
+      } else {
+        setSunoTestStatus('error');
       }
     }
   };

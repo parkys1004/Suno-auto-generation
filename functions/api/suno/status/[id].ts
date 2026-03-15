@@ -1,21 +1,28 @@
 export const onRequest = async (context: any) => {
   const { request, params } = context;
   const id = params.id;
+  const method = request.method.toUpperCase();
   
-  if (request.method === 'OPTIONS') {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+
+  if (method === 'OPTIONS') {
     return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: corsHeaders,
     });
   }
 
-  if (request.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+  if (method !== 'GET') {
+    return new Response(JSON.stringify({ error: `Method ${method} Not Allowed` }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        ...corsHeaders,
+        'Content-Type': 'application/json' 
+      }
     });
   }
   
@@ -86,8 +93,8 @@ export const onRequest = async (context: any) => {
     return new Response(JSON.stringify(jsonData), {
       status: response.status,
       headers: { 
+        ...corsHeaders,
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
       }
     });
   } catch (error: any) {
