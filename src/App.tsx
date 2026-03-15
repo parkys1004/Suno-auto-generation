@@ -650,9 +650,15 @@ export default function App() {
           }
         });
         const data = JSON.parse(response.text || '{}');
-        title = data.title || '제목 없음';
-        lyrics = data.lyrics || '가사 없음';
-        style_prompt = data.style_prompt || allTags;
+        const safeString = (val: any, fallback: string): string => {
+          if (typeof val === 'string') return val;
+          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+          if (val === null || val === undefined) return fallback;
+          return val.label || val.name || JSON.stringify(val);
+        };
+        title = safeString(data.title, '제목 없음');
+        lyrics = safeString(data.lyrics, '가사 없음');
+        style_prompt = safeString(data.style_prompt, allTags);
       } else {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -668,9 +674,15 @@ export default function App() {
         });
         const data = await response.json();
         const parsed = JSON.parse(data.choices[0].message.content);
-        title = parsed.title || '제목 없음';
-        lyrics = parsed.lyrics || '가사 없음';
-        style_prompt = parsed.style_prompt || allTags;
+        const safeString = (val: any, fallback: string): string => {
+          if (typeof val === 'string') return val;
+          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+          if (val === null || val === undefined) return fallback;
+          return val.label || val.name || JSON.stringify(val);
+        };
+        title = safeString(parsed.title, '제목 없음');
+        lyrics = safeString(parsed.lyrics, '가사 없음');
+        style_prompt = safeString(parsed.style_prompt, allTags);
       }
 
       const newPrompt: GeneratedPrompt = {
@@ -766,17 +778,24 @@ export default function App() {
       }
 
       if (data) {
-        if (data.genres) setGenres(data.genres.map((g: string) => ({ id: Math.random().toString(), label: g })));
-        if (data.subGenres) setSubGenres(data.subGenres.map((g: string) => ({ id: Math.random().toString(), label: g })));
-        if (data.moods) setMoods(data.moods.map((m: string) => ({ id: Math.random().toString(), label: m })));
-        if (data.instruments) setInstruments(data.instruments.map((i: string) => ({ id: Math.random().toString(), label: i })));
-        if (data.vocalGenders) setVocalGenders(data.vocalGenders.map((g: string) => ({ id: Math.random().toString(), label: g })));
-        if (data.vocalTypes) setVocalTypes(data.vocalTypes.map((v: string) => ({ id: Math.random().toString(), label: v })));
-        if (data.musicType) setMusicType(data.musicType);
-        if (data.tempo) setTempo(data.tempo);
-        if (data.mainLanguage) setMainLanguage(data.mainLanguage);
-        if (data.lyricsLengthWithSpaces) setLyricsLengthWithSpaces(data.lyricsLengthWithSpaces);
-        if (data.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(data.lyricsLengthWithoutSpaces);
+        const safeString = (val: any): string => {
+          if (typeof val === 'string') return val;
+          if (typeof val === 'number' || typeof val === 'boolean') return String(val);
+          if (val === null || val === undefined) return '';
+          return val.label || val.name || JSON.stringify(val);
+        };
+        
+        if (Array.isArray(data.genres)) setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        if (Array.isArray(data.subGenres)) setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        if (Array.isArray(data.moods)) setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
+        if (Array.isArray(data.instruments)) setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: safeString(i) })));
+        if (Array.isArray(data.vocalGenders)) setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        if (Array.isArray(data.vocalTypes)) setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: safeString(v) })));
+        if (data.musicType) setMusicType(String(data.musicType));
+        if (data.tempo) setTempo(Number(data.tempo) || 80);
+        if (data.mainLanguage) setMainLanguage(String(data.mainLanguage));
+        if (data.lyricsLengthWithSpaces) setLyricsLengthWithSpaces(Number(data.lyricsLengthWithSpaces) || 800);
+        if (data.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(Number(data.lyricsLengthWithoutSpaces) || 400);
         
         setShowAdvanced(true);
       }
