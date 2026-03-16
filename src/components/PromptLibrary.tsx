@@ -63,7 +63,7 @@ export function PromptLibrary({
   const sortedPrompts = [...filteredPrompts].sort((a, b) => {
     if (sortBy === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     if (sortBy === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    if (sortBy === 'title') return a.title.localeCompare(b.title);
+    if (sortBy === 'title') return (a.title || '').localeCompare(b.title || '');
     return 0;
   });
 

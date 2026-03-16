@@ -142,8 +142,13 @@ export default function App() {
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
   const [songs, setSongs] = useState<Song[]>(() => {
-    const saved = localStorage.getItem('generated_songs');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('generated_songs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing songs from localStorage:', e);
+      return [];
+    }
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -217,8 +222,13 @@ export default function App() {
     event.target.value = '';
   };
   const [prompts, setPrompts] = useState<GeneratedPrompt[]>(() => {
-    const saved = localStorage.getItem('generated_prompts');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('generated_prompts');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error('Error parsing prompts from localStorage:', e);
+      return [];
+    }
   });
   const [libraryTab, setLibraryTab] = useState<'music' | 'prompts'>('music');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -410,11 +420,19 @@ export default function App() {
   }, [apiKey, baseUrl, promptModel, geminiApiKey, chatgptApiKey, savePath]);
 
   useEffect(() => {
-    localStorage.setItem('generated_prompts', JSON.stringify(prompts));
+    try {
+      localStorage.setItem('generated_prompts', JSON.stringify(prompts));
+    } catch (e) {
+      console.error('Error saving prompts to localStorage:', e);
+    }
   }, [prompts]);
 
   useEffect(() => {
-    localStorage.setItem('generated_songs', JSON.stringify(songs));
+    try {
+      localStorage.setItem('generated_songs', JSON.stringify(songs));
+    } catch (e) {
+      console.error('Error saving songs to localStorage:', e);
+    }
   }, [songs]);
 
   const playSong = (song: Song) => {
@@ -889,7 +907,7 @@ export default function App() {
         if (data.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(Number(data.lyricsLengthWithoutSpaces) || 400);
         
         setShowAdvanced(true);
-        alert('AI가 추천하는 설정이 적용되었습니다.');
+        console.log('AI Auto Setup completed');
       }
     } catch (err: any) {
       console.error('Auto setup error:', err);
@@ -975,9 +993,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -1128,7 +1146,7 @@ export default function App() {
 
         if (response.data?.code === 200 && response.data?.data?.taskId) {
           const taskId = String(response.data.data.taskId);
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         } else if (response.data?.code && response.data.code !== 200) {
           const msg = response.data.message || response.data.error || '';
           const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
@@ -1136,14 +1154,14 @@ export default function App() {
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => String(s.id));
+          const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
           setTaskIds(prev => [...prev, ...ids]);
         } else if (response.data && response.data.task_id) {
           const taskId = String(response.data.task_id);
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         } else if (response.data && response.data.taskId) {
           const taskId = String(response.data.taskId);
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         }
 
         // Add a small delay between requests if genCount > 1
@@ -1199,9 +1217,9 @@ export default function App() {
         setGenerationProgress(prev => ({ ...prev, current: currentIdx }));
         try {
           let gender = '';
-          if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+          if (vocalGenders.some(t => safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female'))) {
             gender = 'f';
-          } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+          } else if (vocalGenders.some(t => safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male'))) {
             gender = 'm';
           }
 
@@ -1214,7 +1232,7 @@ export default function App() {
             prompt: promptToUse.lyrics || "",
             tags: promptToUse.style_prompt || promptToUse.tags || "",
             title: promptToUse.title || "",
-            negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+            negativeTags: excludedElements.map(t => safeString(t.label)).join(', ') || "",
             vocalGender: gender || "",
             styleWeight: 0.65,
             weirdnessConstraint: 0.65,
