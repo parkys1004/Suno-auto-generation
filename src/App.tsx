@@ -614,6 +614,46 @@ export default function App() {
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [wavPollingTasks, apiKey, baseUrl]);
 
+  const extractJSON = (text: string) => {
+    try {
+      // Try direct parse first
+      return JSON.parse(text);
+    } catch (e) {
+      // Try to extract from markdown code blocks
+      const match = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        try {
+          return JSON.parse(match[1]);
+        } catch (e2) {
+          // If still fails, try to find the first { and last }
+          const firstBrace = text.indexOf('{');
+          const lastBrace = text.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace !== -1) {
+            try {
+              return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+            } catch (e3) {
+              throw new Error('JSON parsing failed even after extraction attempts');
+            }
+          }
+          throw e2;
+        }
+      }
+      
+      // Try to find the first { and last } even without code blocks
+      const firstBrace = text.indexOf('{');
+      const lastBrace = text.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace !== -1) {
+        try {
+          return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+        } catch (e3) {
+          throw new Error('JSON parsing failed');
+        }
+      }
+      
+      throw e;
+    }
+  };
+
   const handleGeneratePrompt = async (shouldSwitchTab: boolean = true): Promise<GeneratedPrompt | null> => {
     if (promptModel === 'gemini' && !geminiApiKey) {
       setError('Gemini API 키를 설정에서 입력해주세요.');
@@ -627,22 +667,23 @@ export default function App() {
     setIsGeneratingPrompt(true);
     setError('');
 
-    const allTags = [
-      ...genres.map(t => t.label),
-      ...subGenres.map(t => t.label),
-      musicType === 'instrumental' ? 'instrumental' : '',
-      ...vocalTypes.map(t => t.label),
-      ...vocalGenders.map(t => t.label),
-      `${tempo}bpm`,
-      ...moods.map(t => t.label),
-      ...instruments.map(t => t.label),
-      subLanguage ? `${mainLanguage} ${100 - subLanguageRatio}%, ${subLanguage} ${subLanguageRatio}%` : mainLanguage,
-      ...excludedElements.map(t => `no ${t.label}`)
-    ].filter(Boolean).join(', ');
+    try {
+      const allTags = [
+        ...genres.map(t => t.label),
+        ...subGenres.map(t => t.label),
+        musicType === 'instrumental' ? 'instrumental' : '',
+        ...vocalTypes.map(t => t.label),
+        ...vocalGenders.map(t => t.label),
+        `${tempo}bpm`,
+        ...moods.map(t => t.label),
+        ...instruments.map(t => t.label),
+        subLanguage ? `${mainLanguage} ${100 - subLanguageRatio}%, ${subLanguage} ${subLanguageRatio}%` : mainLanguage,
+        ...excludedElements.map(t => `no ${t.label}`)
+      ].filter(Boolean).join(', ');
 
-    const lengthDescription = `공백 포함 약 ${lyricsLengthWithSpaces}자, 공백 제외 약 ${lyricsLengthWithoutSpaces}자 내외의 분량 (지정된 장르에 최적화된 구조 적용)`;
+      const lengthDescription = `공백 포함 약 ${lyricsLengthWithSpaces}자, 공백 제외 약 ${lyricsLengthWithoutSpaces}자 내외의 분량 (지정된 장르에 최적화된 구조 적용)`;
 
-    const systemPrompt = `당신은 전문적인 음악 작사가이자 프로듀서입니다. 다음 설정을 바탕으로 음악의 제목, 가사, 그리고 Suno AI에 입력할 최적화된 '스타일 프롬프트(Style Prompt)'를 작성해주세요.
+      const systemPrompt = `당신은 전문적인 음악 작사가이자 프로듀서입니다. 다음 설정을 바탕으로 음악의 제목, 가사, 그리고 Suno AI에 입력할 최적화된 '스타일 프롬프트(Style Prompt)'를 작성해주세요.
 
 설명: ${description}
 추가 요청사항: ${additionalRequest}
@@ -668,21 +709,31 @@ export default function App() {
   "style_prompt": "Suno AI용 영문 스타일 프롬프트"
 }`;
 
-    try {
       let title = '';
       let lyrics = '';
       let style_prompt = '';
 
       if (promptModel === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const response = await ai.models.generateContent({
+        const result = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: systemPrompt,
           config: {
             responseMimeType: 'application/json',
           }
         });
-        const data = JSON.parse(response.text || '{}');
+        
+        let responseText = '';
+        try {
+          responseText = result.text || '';
+        } catch (e) {
+          console.error('Error getting response text:', e);
+          if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+            responseText = result.candidates[0].content.parts[0].text;
+          }
+        }
+
+        const data = extractJSON(responseText || '{}');
         title = safeString(data.title, '제목 없음');
         lyrics = safeString(data.lyrics, '가사 없음');
         style_prompt = safeString(data.style_prompt, allTags);
@@ -699,8 +750,15 @@ export default function App() {
             response_format: { type: 'json_object' }
           })
         });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
+        }
+
         const data = await response.json();
-        const parsed = JSON.parse(data.choices[0].message.content);
+        const content = data.choices?.[0]?.message?.content || '{}';
+        const parsed = extractJSON(content);
         title = safeString(parsed.title, '제목 없음');
         lyrics = safeString(parsed.lyrics, '가사 없음');
         style_prompt = safeString(parsed.style_prompt, allTags);
@@ -719,7 +777,8 @@ export default function App() {
       if (shouldSwitchTab) setLibraryTab('prompts');
       return newPrompt;
     } catch (err: any) {
-      setError('프롬프트 생성 중 오류가 발생했습니다: ' + (err.message || ''));
+      console.error('Prompt generation error:', err);
+      setError('프롬프트 생성 중 오류가 발생했습니다: ' + (err?.message || String(err)));
       return null;
     } finally {
       setIsGeneratingPrompt(false);
@@ -773,14 +832,25 @@ export default function App() {
       let data;
       if (promptModel === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const response = await ai.models.generateContent({
+        const result = await ai.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: systemPrompt,
           config: {
             responseMimeType: 'application/json',
           }
         });
-        data = JSON.parse(response.text || '{}');
+        
+        let responseText = '';
+        try {
+          responseText = result.text || '';
+        } catch (e) {
+          console.error('Error getting response text:', e);
+          if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
+            responseText = result.candidates[0].content.parts[0].text;
+          }
+        }
+
+        data = extractJSON(responseText || '{}');
       } else {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -794,8 +864,15 @@ export default function App() {
             response_format: { type: 'json_object' }
           })
         });
+
+        if (!response.ok) {
+          const errData = await response.json();
+          throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
+        }
+
         const resData = await response.json();
-        data = JSON.parse(resData.choices[0].message.content);
+        const content = resData.choices?.[0]?.message?.content || '{}';
+        data = extractJSON(content);
       }
 
       if (data) {
@@ -812,9 +889,11 @@ export default function App() {
         if (data.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(Number(data.lyricsLengthWithoutSpaces) || 400);
         
         setShowAdvanced(true);
+        alert('AI가 추천하는 설정이 적용되었습니다.');
       }
     } catch (err: any) {
-      setError('자동 설정 중 오류가 발생했습니다: ' + (err.message || ''));
+      console.error('Auto setup error:', err);
+      setError('자동 설정 중 오류가 발생했습니다: ' + (err?.message || String(err)));
     } finally {
       setIsAutoSetting(false);
     }
@@ -1007,9 +1086,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -1035,7 +1114,7 @@ export default function App() {
           prompt: promptToUse.lyrics || "",
           tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: requestTitle || "",
-          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+          negativeTags: excludedElements.map(t => safeString(t.label)).join(', ') || "",
           vocalGender: gender || "",
           styleWeight: 0.65,
           weirdnessConstraint: 0.65,
@@ -1048,7 +1127,7 @@ export default function App() {
         console.log('Generate Response (Direct):', response.data);
 
         if (response.data?.code === 200 && response.data?.data?.taskId) {
-          const taskId = response.data.data.taskId;
+          const taskId = String(response.data.data.taskId);
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
           const msg = response.data.message || response.data.error || '';
@@ -1057,13 +1136,13 @@ export default function App() {
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => s.id);
+          const ids = slicedData.map((s: any) => String(s.id));
           setTaskIds(prev => [...prev, ...ids]);
         } else if (response.data && response.data.task_id) {
-          const taskId = response.data.task_id;
+          const taskId = String(response.data.task_id);
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data && response.data.taskId) {
-          const taskId = response.data.taskId;
+          const taskId = String(response.data.taskId);
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         }
 
@@ -1073,7 +1152,9 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
+      console.error('Music generation error:', err);
+      const errorMsg = err.response?.data?.error || err.response?.data?.message || err.message || String(err) || '음악 생성 요청에 실패했습니다.';
+      setError(errorMsg);
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1081,6 +1162,11 @@ export default function App() {
       });
     } finally {
       setIsRequesting(false);
+      // If we finished all loops and no task IDs were added, we should reset isGenerating
+      setTaskIds(prev => {
+        if (prev.length === 0) setIsGenerating(false);
+        return prev;
+      });
     }
   };
 
