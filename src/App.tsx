@@ -828,7 +828,7 @@ export default function App() {
 - 지정된 장르의 가장 대중적이고 최적화된 곡 구조(Intro-Verse-Chorus-Bridge-Outro)를 자동으로 적용하여 약 3분 내외의 곡이 되도록 충분한 분량의 가사를 작성하세요.
 - 반드시 각 단락 앞에 메타 태그(예: [Intro], [Verse 1], [Chorus], [Verse 2], [Bridge], [Outro], [Guitar Solo], [Drop] 등)를 포함하여 Suno AI가 곡의 흐름을 이해할 수 있게 하세요.
 - 곡 중간의 모든 지시문(예: [Emotional], [Whispering], [Build-up], [Fast], [Slow] 등)과 악기 연주 지시도 반드시 대괄호 []를 사용하여 작성하세요.
-- 장르의 특성(리듬, 라임, 감정선)을 살려 작사하세요.
+- 장르의 특성(리듬, 라임, 감정선)을 살려 작사하되, **선택된 태그 정보(장르명, 악기명, 분위기 등)를 가사 텍스트 내에 직접적으로 언급하거나 포함하지 마세요.**
 - 기악곡(Instrumental)인 경우 가사 대신 "[Instrumental]" 이라고만 작성하세요.
 
 [Suno AI 스타일 프롬프트 작성 가이드]

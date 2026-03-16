@@ -34,7 +34,23 @@ async function startServer() {
   // API route to proxy requests to Suno API
   app.post('/api/suno/generate', async (req, res) => {
     try {
-      const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
+      const { 
+        apiKey: rawApiKey, 
+        prompt, 
+        make_instrumental, 
+        tags, 
+        title, 
+        baseUrl, 
+        model, 
+        negativeTags, 
+        vocalGender,
+        personaId,
+        personaModel,
+        styleWeight,
+        weirdnessConstraint,
+        audioWeight,
+        callBackUrl
+      } = req.body;
       const apiKey = sanitizeKey(rawApiKey);
 
       if (!apiKey) {
@@ -63,10 +79,12 @@ async function startServer() {
         title: title || "",
         negativeTags: negativeTags || "",
         vocalGender: vocalGender || "",
-        styleWeight: 0.65,
-        weirdnessConstraint: 0.65,
-        audioWeight: 0.65,
-        callBackUrl: "https://example.com/callback"
+        personaId: personaId || undefined,
+        personaModel: personaModel || undefined,
+        styleWeight: styleWeight !== undefined ? styleWeight : 0.65,
+        weirdnessConstraint: weirdnessConstraint !== undefined ? weirdnessConstraint : 0.65,
+        audioWeight: audioWeight !== undefined ? audioWeight : 0.65,
+        callBackUrl: callBackUrl || "https://example.com/callback"
       };
 
       console.log(`Proxying generate to: ${apiUrl}/generate`);
