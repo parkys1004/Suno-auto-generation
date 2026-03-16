@@ -23,7 +23,8 @@ async function startServer() {
 
   const sanitizeKey = (key: string | null) => {
     if (!key) return '';
-    let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    // Be less restrictive with characters, just trim and remove potential "Bearer " prefix
+    let sanitized = key.trim();
     if (sanitized.toLowerCase().startsWith('bearer ')) {
       sanitized = sanitized.slice(7).trim();
     }
@@ -69,6 +70,8 @@ async function startServer() {
       };
 
       console.log(`Proxying generate to: ${apiUrl}/generate`);
+      console.log(`Payload:`, JSON.stringify({ ...payload, prompt: payload.prompt?.substring(0, 20) + '...' }));
+
       const response = await axios.post(
         `${apiUrl}/generate`,
         payload,
@@ -76,19 +79,51 @@ async function startServer() {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           },
-          timeout: 30000
+          timeout: 45000 // Increase timeout slightly
         }
       );
 
+      console.log(`Suno API Success:`, response.data);
       res.json(response.data);
     } catch (error: any) {
       const status = error.response?.status || 500;
       const data = error.response?.data;
-      console.error(`Suno API Error (${status}):`, data || error.message);
+      console.error(`Suno API Error (${status}):`, JSON.stringify(data) || error.message);
+      
+      // If it's a 401, maybe the provider doesn't want the "Bearer " prefix?
+      // Some providers just want the key in the Authorization header.
+      if (status === 401 && !req.query.retry) {
+        console.log('Retrying without Bearer prefix...');
+        try {
+          const { apiKey: rawApiKey, ...rest } = req.body;
+          const apiKey = sanitizeKey(rawApiKey);
+          const apiUrl = req.body.baseUrl || 'https://api.sunoapi.org/api/v1';
+          const response = await axios.post(
+            `${apiUrl}/generate`,
+            req.body, // Use original body
+            {
+              headers: {
+                'Authorization': apiKey, // Try without Bearer
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+              },
+              timeout: 45000
+            }
+          );
+          return res.json(response.data);
+        } catch (retryError: any) {
+          console.error('Retry failed:', retryError.message);
+        }
+      }
+
       res.status(status).json({
         error: data?.message || data?.error || error.message || 'Failed to generate music',
-        details: data
+        details: data,
+        code: data?.code || status
       });
     }
   });
@@ -128,6 +163,8 @@ async function startServer() {
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           },
           timeout: 30000
         }
@@ -137,10 +174,77 @@ async function startServer() {
     } catch (error: any) {
       const status = error.response?.status || 500;
       const data = error.response?.data;
-      console.error(`Suno WAV API Error (${status}):`, data || error.message);
+      console.error(`Suno WAV API Error (${status}):`, JSON.stringify(data) || error.message);
       res.status(status).json({
         error: data?.message || data?.error || error.message || 'Failed to generate WAV',
-        details: data
+        details: data,
+        code: data?.code || status
+      });
+    }
+  });
+
+  app.get('/api/suno/status/test', async (req, res) => {
+    try {
+      const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
+      let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
+
+      if (!apiKey) {
+        return res.status(400).json({ error: 'API Key is required' });
+      }
+
+      if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
+        apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
+      }
+      if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
+        apiUrl = 'https://api.sunoapi.org/api/v1';
+      }
+      if (apiUrl.endsWith('/')) {
+        apiUrl = apiUrl.slice(0, -1);
+      }
+
+      // Use a simple endpoint to test the key
+      const testUrl = `${apiUrl}/limit`;
+      console.log(`Testing Suno API key at: ${testUrl}`);
+      
+      const response = await axios.get(testUrl, {
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 10000
+      });
+      
+      res.json({ success: true, data: response.data });
+    } catch (error: any) {
+      const status = error.response?.status || 500;
+      const data = error.response?.data;
+      console.error(`Suno Test API Error (${status}):`, JSON.stringify(data) || error.message);
+      
+      // If 401, try without Bearer
+      if (status === 401) {
+        try {
+          const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
+          let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
+          const retryResponse = await axios.get(`${apiUrl}/limit`, {
+            headers: { 
+              'Authorization': apiKey,
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 10000
+          });
+          return res.json({ success: true, data: retryResponse.data });
+        } catch (retryError) {
+          // Ignore retry error
+        }
+      }
+
+      res.status(status).json({
+        success: false,
+        error: data?.message || data?.error || error.message || 'Invalid API Key',
+        details: data,
+        code: data?.code || status
       });
     }
   });
@@ -171,7 +275,11 @@ async function startServer() {
       
       try {
         const response = await axios.get(statusUrl, {
-          headers: { 'Authorization': `Bearer ${apiKey}` },
+          headers: { 
+            'Authorization': `Bearer ${apiKey}`,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          },
           timeout: 15000
         });
         return res.json(response.data);
@@ -181,7 +289,11 @@ async function startServer() {
           const fallbackUrl = `${apiUrl}/status/${id}`;
           console.log(`Retrying status check with fallback: ${fallbackUrl}`);
           const fallbackResponse = await axios.get(fallbackUrl, {
-            headers: { 'Authorization': `Bearer ${apiKey}` },
+            headers: { 
+              'Authorization': `Bearer ${apiKey}`,
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
             timeout: 15000
           });
           return res.json(fallbackResponse.data);
@@ -191,10 +303,11 @@ async function startServer() {
     } catch (error: any) {
       const status = error.response?.status || 500;
       const data = error.response?.data;
-      console.error(`Suno Status API Error (${status}):`, data || error.message);
+      console.error(`Suno Status API Error (${status}):`, JSON.stringify(data) || error.message);
       res.status(status).json({
         error: data?.message || data?.error || error.message || 'Failed to check status',
-        details: data
+        details: data,
+        code: data?.code || status
       });
     }
   });

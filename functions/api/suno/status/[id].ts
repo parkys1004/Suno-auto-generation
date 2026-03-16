@@ -1,21 +1,28 @@
 export const onRequest = async (context: any) => {
   const { request, params } = context;
   const id = params.id;
+  const method = request.method.toUpperCase();
   
-  if (request.method === 'OPTIONS') {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Max-Age': '86400',
+  };
+
+  if (method === 'OPTIONS') {
     return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: corsHeaders,
     });
   }
 
-  if (request.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
+  if (method !== 'GET') {
+    return new Response(JSON.stringify({ error: `Method ${method} Not Allowed` }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        ...corsHeaders,
+        'Content-Type': 'application/json' 
+      }
     });
   }
   
@@ -56,25 +63,38 @@ export const onRequest = async (context: any) => {
   const statusUrl = `${apiUrl}/generate/record-info?taskId=${id}`;
   
   try {
-    let response = await fetch(statusUrl, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
-
-    if (response.status === 404 || response.status === 405) {
-      const fallbackUrl = `${apiUrl}/status/${id}`;
-      response = await fetch(fallbackUrl, {
+    const performRequest = async (url: string) => {
+      return await fetch(url, {
         method: 'GET',
         headers: { 'Authorization': `Bearer ${apiKey}` }
       });
+    };
+
+    let response = await performRequest(statusUrl);
+
+    if (response.status === 404 || response.status === 405) {
+      const fallbackUrl = `${apiUrl}/status/${id}`;
+      response = await performRequest(fallbackUrl);
+    }
+    
+    // One more try with trailing slash if still 405
+    if (response.status === 405) {
+      response = await performRequest(`${apiUrl}/generate/record-info/?taskId=${id}`);
     }
 
-    const data = await response.json();
-    return new Response(JSON.stringify(data), {
+    const data = await response.text();
+    let jsonData;
+    try {
+      jsonData = JSON.parse(data);
+    } catch (e) {
+      jsonData = { message: data };
+    }
+
+    return new Response(JSON.stringify(jsonData), {
       status: response.status,
       headers: { 
+        ...corsHeaders,
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
       }
     });
   } catch (error: any) {

@@ -67,16 +67,16 @@ export function SettingsModal({
     if (!apiKey) return;
     setSunoTestStatus('testing');
     try {
-      await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
+      const response = await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
-      setSunoTestStatus('success');
-    } catch (e: any) {
-      if (e.response?.status === 401) {
-        setSunoTestStatus('error');
-      } else {
+      if (response.data?.success) {
         setSunoTestStatus('success');
+      } else {
+        setSunoTestStatus('error');
       }
+    } catch (e: any) {
+      setSunoTestStatus('error');
     }
   };
 
@@ -145,7 +145,7 @@ export function SettingsModal({
                     type="password"
                     value={promptModel === 'gemini' ? geminiApiKey : chatgptApiKey}
                     onChange={(e) => {
-                      let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      let val = e.target.value.trim();
                       if (val.toLowerCase().startsWith('bearer ')) {
                         val = val.slice(7).trim();
                       }
@@ -195,7 +195,7 @@ export function SettingsModal({
                     type="password"
                     value={apiKey}
                     onChange={(e) => {
-                      let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
+                      let val = e.target.value.trim();
                       if (val.toLowerCase().startsWith('bearer ')) {
                         val = val.slice(7).trim();
                       }

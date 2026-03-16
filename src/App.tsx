@@ -64,7 +64,7 @@ export default function App() {
 
   const sanitizeKey = (key: string | null) => {
     if (!key) return '';
-    let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    let sanitized = key.trim();
     if (sanitized.toLowerCase().startsWith('bearer ')) {
       sanitized = sanitized.slice(7).trim();
     }
