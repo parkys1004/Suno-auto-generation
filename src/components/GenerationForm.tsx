@@ -1009,23 +1009,33 @@ export function GenerationForm({
 
       {/* Save Path */}
       <div className="space-y-2">
-        <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">저장 경로</label>
+        <div className="flex items-center justify-between">
+          <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">저장 경로</label>
+          {savePath.startsWith('[선택됨]') && (
+            <span className="text-[10px] font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+              <Check className="w-2.5 h-2.5" /> 자동 저장 활성화됨
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           <input 
             type="text"
             value={savePath}
             onChange={(e) => setSavePath(e.target.value)}
-            className="flex-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)]/50"
+            className={`flex-1 bg-[var(--bg-secondary)] border rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] outline-none transition-all ${savePath.startsWith('[선택됨]') ? 'border-emerald-400/50 focus:border-emerald-400' : 'border-[var(--border-color)] focus:border-[var(--accent-primary)]/50'}`}
             placeholder="저장 경로 입력 또는 우측 버튼으로 선택"
           />
           <button 
             onClick={handleSelectFolder}
-            className="p-2.5 bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl transition-colors"
-            title="폴더 선택"
+            className={`p-2.5 border rounded-xl transition-colors ${savePath.startsWith('[선택됨]') ? 'bg-emerald-400/10 border-emerald-400/50 text-emerald-400' : 'bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+            title="폴더 선택 (자동 저장)"
           >
             <FolderOpen className="w-5 h-5" />
           </button>
         </div>
+        <p className="text-[10px] text-[var(--text-secondary)] opacity-60">
+          * 폴더를 선택하면 음악 생성 완료 시 해당 폴더에 자동으로 파일이 저장됩니다.
+        </p>
       </div>
 
       {/* Generate Button */}

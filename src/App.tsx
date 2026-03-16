@@ -620,21 +620,43 @@ export default function App() {
                   
                   // Auto-download logic...
                   if (dirHandle && sunoData.length > 0) {
-                    sunoData.forEach(async (newSong: any) => {
-                      const audioUrl = newSong.audioUrl || newSong.audio_url;
+                    sunoData.forEach(async (newSong: any, index: number) => {
+                      const audioUrl = newSong.audioUrl || newSong.audio_url || newSong.url || newSong.play_url || newSong.cdn_url || newSong.stream_url;
                       if (audioUrl) {
                         try {
-                          const response = await fetch(audioUrl);
+                          // Use proxy to avoid CORS issues
+                          const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(audioUrl)}`;
+                          const response = await fetch(proxyUrl);
                           if (!response.ok) throw new Error('Network response was not ok');
                           const blob = await response.blob();
+                          
                           const safeTitle = (newSong.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
-                          const fileName = `${safeTitle}.mp3`;
+                          const songId = newSong.id || `song_${Date.now()}_${index}`;
+                          const fileName = `${safeTitle}_${songId.slice(-4)}.mp3`;
+                          
                           const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
                           const writable = await fileHandle.createWritable();
                           await writable.write(blob);
                           await writable.close();
+                          
+                          console.log(`Successfully auto-saved: ${fileName}`);
+                          setSuccess(`로컬 폴더에 자동 저장됨: ${fileName}`);
                         } catch (err) {
                           console.error('Auto-download failed:', err);
+                          // Fallback to direct fetch if proxy fails
+                          try {
+                            const response = await fetch(audioUrl);
+                            const blob = await response.blob();
+                            const safeTitle = (newSong.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
+                            const fileName = `${safeTitle}_${Date.now().toString().slice(-4)}.mp3`;
+                            const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                            setSuccess(`로컬 폴더에 자동 저장됨: ${fileName}`);
+                          } catch (e) {
+                            console.error('Direct auto-download also failed:', e);
+                          }
                         }
                       }
                     });
