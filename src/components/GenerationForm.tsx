@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Sparkles, Loader2, ChevronDown, X, Sliders, 
-  Languages, LayoutGrid, Music, AlertCircle, FolderOpen
+  Languages, LayoutGrid, Music, AlertCircle, FolderOpen, Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tag } from '../types';
@@ -68,6 +68,7 @@ interface GenerationFormProps {
   isGeneratingPrompt: boolean;
   isGenerating: boolean;
   error: string;
+  success?: string;
   removeTag: (setFn: React.Dispatch<React.SetStateAction<Tag[]>>, id: string) => void;
 }
 
@@ -88,7 +89,7 @@ export function GenerationForm({
   additionalRequest, setAdditionalRequest, genCount, setGenCount,
   lyricsLengthWithSpaces, setLyricsLengthWithSpaces, lyricsLengthWithoutSpaces, setLyricsLengthWithoutSpaces,
   savePath, setSavePath, handleSelectFolder,
-  handleGeneratePrompts, handleGenerate, isGeneratingPrompt, isGenerating, error, removeTag
+  handleGeneratePrompts, handleGenerate, isGeneratingPrompt, isGenerating, error, success, removeTag
 }: GenerationFormProps) {
   // UI States for adding tags
   const [isAddingGenre, setIsAddingGenre] = useState(false);
@@ -1033,6 +1034,12 @@ export function GenerationForm({
           <div className="flex items-center gap-2 text-red-400 bg-red-400/10 p-3 rounded-xl text-sm mb-2 border border-red-400/20">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <p>{error}</p>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 p-3 rounded-xl text-sm mb-2 border border-emerald-400/20">
+            <Check className="w-4 h-4 shrink-0" />
+            <p>{success}</p>
           </div>
         )}
         <div className="flex gap-2">

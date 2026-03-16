@@ -141,6 +141,7 @@ export default function App() {
   const [isRequesting, setIsRequesting] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [songs, setSongs] = useState<Song[]>(() => {
     try {
       const saved = localStorage.getItem('generated_songs');
@@ -150,6 +151,13 @@ export default function App() {
       return [];
     }
   });
+
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => setSuccess(''), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -212,9 +220,9 @@ export default function App() {
         if (settings.lyricsLengthWithSpaces) setLyricsLengthWithSpaces(settings.lyricsLengthWithSpaces);
         if (settings.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(settings.lyricsLengthWithoutSpaces);
         
-        alert('설정이 성공적으로 적용되었습니다.');
+        setSuccess('설정이 성공적으로 적용되었습니다.');
       } catch (err) {
-        alert('잘못된 설정 파일입니다.');
+        setError('잘못된 설정 파일입니다.');
       }
     };
     reader.readAsText(file);
@@ -275,12 +283,12 @@ export default function App() {
         setDirHandle(handle);
         setSavePath(`[선택됨] ${handle.name}`);
       } else {
-        alert('이 브라우저에서는 폴더 선택 기능을 지원하지 않습니다. 경로를 직접 입력해주세요.');
+        setError('이 브라우저에서는 폴더 선택 기능을 지원하지 않습니다. 경로를 직접 입력해주세요.');
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
         console.error('폴더 선택 에러:', err);
-        alert('폴더를 선택하는 중 오류가 발생했습니다.');
+        setError('폴더를 선택하는 중 오류가 발생했습니다.');
       }
     }
   };
@@ -300,13 +308,13 @@ export default function App() {
       });
       
       if (response.data) {
-        alert('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
+        setSuccess('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
         setWavPollingTasks(prev => ({ ...prev, [song.id]: song.taskId || song.id }));
       } else {
         setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
       }
     } catch (err: any) {
-      alert(err.response?.data?.error || err.response?.data?.message || err.message || 'WAV 변환 요청에 실패했습니다.');
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'WAV 변환 요청에 실패했습니다.');
       setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
     }
   };
@@ -717,7 +725,7 @@ export default function App() {
 
 [Suno AI 스타일 프롬프트 작성 가이드]
 - 선택된 기본 태그와 설명을 바탕으로 Suno AI가 가장 잘 이해할 수 있는 음악 장르, 무드, 악기, 보컬 스타일 등을 쉼표로 구분하여 영문으로 작성하세요.
-- 특히 선택된 주요 악기(${instruments.map(t => t.label).join(', ')}) 소리가 곡 전체에서 잘 들리고 강조되도록 프롬프트에 포함하세요. (예: prominent piano, leading electric guitar, heavy bass 등)
+- 특히 선택된 주요 악기(${(instruments || []).map(t => t && t.label).join(', ')}) 소리가 곡 전체에서 잘 들리고 강조되도록 프롬프트에 포함하세요. (예: prominent piano, leading electric guitar, heavy bass 등)
 - 최대 120자를 넘지 않도록 핵심 키워드 위주로 간결하게 작성하세요.
 
 반드시 다음 JSON 형식으로 응답해주세요:
@@ -948,7 +956,7 @@ export default function App() {
   };
 
   const selectAllPrompts = () => {
-    const allIds = prompts.map(p => p.id);
+    const allIds = (prompts || []).map(p => p && p.id).filter(Boolean);
     setSelectedPrompts(prev => {
       if (prev.size === allIds.length && allIds.every(id => prev.has(id))) {
         return new Set();
@@ -959,8 +967,8 @@ export default function App() {
 
   const selectTodayPrompts = () => {
     const today = new Date().toDateString();
-    const todayIds = prompts
-      .filter(p => new Date(p.created_at).toDateString() === today)
+    const todayIds = (prompts || [])
+      .filter(p => p && new Date(p.created_at).toDateString() === today)
       .map(p => p.id);
     
     if (todayIds.length === 0) return;
@@ -976,8 +984,8 @@ export default function App() {
 
   const selectRecentPrompts = () => {
     const oneHourAgo = new Date().getTime() - 1000 * 60 * 60;
-    const recentIds = prompts
-      .filter(p => new Date(p.created_at).getTime() > oneHourAgo)
+    const recentIds = (prompts || [])
+      .filter(p => p && new Date(p.created_at).getTime() > oneHourAgo)
       .map(p => p.id);
     
     if (recentIds.length === 0) return;
@@ -1005,9 +1013,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female'))) {
+      if ((vocalGenders || []).some(t => t && (safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female')))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male'))) {
+      } else if ((vocalGenders || []).some(t => t && (safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male')))) {
         gender = 'm';
       }
 
@@ -1116,9 +1124,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female'))) {
+      if ((vocalGenders || []).some(t => t && (safeString(t.label).includes('여성') || safeString(t.label).toLowerCase().includes('female')))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male'))) {
+      } else if ((vocalGenders || []).some(t => t && (safeString(t.label).includes('남성') || safeString(t.label).toLowerCase().includes('male')))) {
         gender = 'm';
       }
 
@@ -1307,27 +1315,23 @@ export default function App() {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('정말로 이 음악을 삭제하시겠습니까?')) {
-      setSongs(prev => prev.filter(s => s.id !== id));
-      if (currentSong?.id === id) {
-        setCurrentSong(null);
-        setIsPlaying(false);
-      }
+    setSongs(prev => prev.filter(s => s.id !== id));
+    if (currentSong?.id === id) {
+      setCurrentSong(null);
+      setIsPlaying(false);
     }
   };
 
   const handleDeletePrompt = (id: string) => {
-    if (confirm('정말로 이 프롬프트를 삭제하시겠습니까?')) {
-      setPrompts(prev => prev.filter(p => p.id !== id));
-    }
+    setPrompts(prev => prev.filter(p => p.id !== id));
   };
 
   const handleExtend = (song: Song) => {
-    alert('확장 기능은 아직 준비 중입니다.');
+    setSuccess('확장 기능은 아직 준비 중입니다.');
   };
 
   const removeTag = (setFn: React.Dispatch<React.SetStateAction<Tag[]>>, id: string) => {
-    setFn(prev => prev.filter(t => t.id !== id));
+    setFn(prev => (prev || []).filter(t => t && t.id !== id));
   };
 
   return (
@@ -1398,6 +1402,7 @@ export default function App() {
           isGeneratingPrompt={isGeneratingPrompt}
           isGenerating={isGenerating}
           error={error}
+          success={success}
           removeTag={removeTag}
         />
 
