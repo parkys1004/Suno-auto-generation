@@ -183,15 +183,60 @@ app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
       apiUrl = apiUrl.slice(0, -1);
     }
 
-    const testUrl = `${apiUrl}/limit`;
-    const response = await axios.get(testUrl, {
-      headers: { 
-        'Authorization': `Bearer ${apiKey}`,
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      },
-      timeout: 10000
-    });
+    let testUrl = `${apiUrl}/limit`;
+    let response;
+    try {
+      response = await axios.get(testUrl, {
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 10000
+      });
+    } catch (error: any) {
+      // If /limit is not found, try /feed as a fallback
+      if (error.response?.status === 404) {
+        testUrl = `${apiUrl}/feed`;
+        try {
+          response = await axios.get(testUrl, {
+            headers: { 
+              'Authorization': `Bearer ${apiKey}`,
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 10000
+          });
+        } catch (feedError: any) {
+          // If /feed is also not found, try a generic status check as last resort
+          if (feedError.response?.status === 404) {
+            testUrl = `${apiUrl}/generate/record-info?taskId=test`;
+            try {
+              response = await axios.get(testUrl, {
+                headers: { 
+                  'Authorization': `Bearer ${apiKey}`,
+                  'Accept': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                timeout: 10000
+              });
+            } catch (lastError: any) {
+              if (lastError.response?.status === 401 || lastError.response?.status === 403) {
+                throw lastError;
+              }
+              if (lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
+                 return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
+              }
+              throw lastError;
+            }
+          } else {
+            throw feedError;
+          }
+        }
+      } else {
+        throw error;
+      }
+    }
     
     res.json({ success: true, data: response.data });
   } catch (error: any) {
@@ -202,14 +247,58 @@ app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
       try {
         const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
         let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
-        const retryResponse = await axios.get(`${apiUrl}/limit`, {
-          headers: { 
-            'Authorization': apiKey,
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          },
-          timeout: 10000
-        });
+        let retryUrl = `${apiUrl}/limit`;
+        let retryResponse;
+        try {
+          retryResponse = await axios.get(retryUrl, {
+            headers: { 
+              'Authorization': apiKey,
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 10000
+          });
+        } catch (retryError: any) {
+          if (retryError.response?.status === 404) {
+            retryUrl = `${apiUrl}/feed`;
+            try {
+              retryResponse = await axios.get(retryUrl, {
+                headers: { 
+                  'Authorization': apiKey,
+                  'Accept': 'application/json',
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                },
+                timeout: 10000
+              });
+            } catch (retryFeedError: any) {
+              if (retryFeedError.response?.status === 404) {
+                retryUrl = `${apiUrl}/generate/record-info?taskId=test`;
+                try {
+                  retryResponse = await axios.get(retryUrl, {
+                    headers: { 
+                      'Authorization': apiKey,
+                      'Accept': 'application/json',
+                      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                    },
+                    timeout: 10000
+                  });
+                } catch (retryLastError: any) {
+                  if (retryLastError.response?.status === 401 || retryLastError.response?.status === 403) {
+                    throw retryLastError;
+                  }
+                  if (retryLastError.response?.data?.code === 404 || retryLastError.response?.data?.msg?.includes('not found')) {
+                     return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
+                  }
+                  throw retryLastError;
+                }
+              } else {
+                throw retryFeedError;
+              }
+            }
+          } else {
+            throw retryError;
+          }
+        }
         return res.json({ success: true, data: retryResponse.data });
       } catch (retryError) {
         // Ignore
