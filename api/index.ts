@@ -10,6 +10,11 @@ app.use(express.json());
 const sanitizeKey = (key: string | null) => {
   if (!key) return '';
   let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+  // Remove surrounding quotes if present
+  if ((sanitized.startsWith('"') && sanitized.endsWith('"')) || 
+      (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
+    sanitized = sanitized.slice(1, -1).trim();
+  }
   if (sanitized.toLowerCase().startsWith('bearer ')) {
     sanitized = sanitized.slice(7).trim();
   }
@@ -75,6 +80,13 @@ app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
     }
 
     if (response.status >= 400) {
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'API 인증 실패 (401 Unauthorized)',
+          message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요. (예: Vessel 사용 시 Base URL을 https://api.vessel.ai/v1 으로 설정)',
+          details: response.data
+        });
+      }
       return res.status(response.status).json(response.data);
     }
 
@@ -152,6 +164,13 @@ app.post(/.*\/suno\/wav\/generate\/?$/, async (req, res) => {
     }
 
     if (response.status >= 400) {
+      if (response.status === 401) {
+        return res.status(401).json({
+          error: 'API 인증 실패 (401 Unauthorized)',
+          message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요.',
+          details: response.data
+        });
+      }
       return res.status(response.status).json(response.data);
     }
 
@@ -196,6 +215,13 @@ app.get(/.*\/suno\/status\/[^\/]+\/?$/, async (req, res) => {
       });
       return res.json(response.data);
     } catch (innerError: any) {
+      if (innerError.response?.status === 401) {
+        return res.status(401).json({
+          error: 'API 인증 실패 (401 Unauthorized)',
+          message: '상태 확인 중 인증 오류가 발생했습니다. API 키와 Base URL이 일치하는지 확인해주세요.',
+          details: innerError.response.data
+        });
+      }
       if (innerError.response?.status === 404 || innerError.response?.status === 405) {
         const fallbackUrl = `${apiUrl}/status/${id}`;
         const fallbackResponse = await axios.get(fallbackUrl, {

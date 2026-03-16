@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Music, Loader2, Search, ArrowUp
+  Music, Loader2, Search, ArrowUp, X
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,6 +65,11 @@ export default function App() {
   const sanitizeKey = (key: string | null) => {
     if (!key) return '';
     let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
+    // Remove surrounding quotes if present
+    if ((sanitized.startsWith('"') && sanitized.endsWith('"')) || 
+        (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
+      sanitized = sanitized.slice(1, -1).trim();
+    }
     if (sanitized.toLowerCase().startsWith('bearer ')) {
       sanitized = sanitized.slice(7).trim();
     }
@@ -157,6 +162,10 @@ export default function App() {
 
   const [apiKey, setApiKey] = useState(() => sanitizeKey(localStorage.getItem('suno_api_key')));
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('suno_base_url') || 'https://api.sunoapi.org/api/v1');
+
+  useEffect(() => {
+    localStorage.setItem('suno_base_url', baseUrl);
+  }, [baseUrl]);
   
   // Form States
   const [description, setDescription] = useState('');
@@ -856,6 +865,7 @@ export default function App() {
       }
 
       if (data) {
+        console.log('AI Auto Setup Data:', data);
         if (Array.isArray(data.genres)) setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.subGenres)) setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.moods)) setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
@@ -953,9 +963,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -1064,9 +1074,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -1170,9 +1180,9 @@ export default function App() {
         setGenerationProgress(prev => ({ ...prev, current: currentIdx }));
         try {
           let gender = '';
-          if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
+          if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
             gender = 'f';
-          } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
+          } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
             gender = 'm';
           }
 
@@ -1587,6 +1597,7 @@ export default function App() {
         apiKey={apiKey}
         setApiKey={setApiKey}
         baseUrl={baseUrl}
+        setBaseUrl={setBaseUrl}
       />
 
       <style dangerouslySetInnerHTML={{ __html: `
