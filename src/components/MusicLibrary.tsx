@@ -131,7 +131,7 @@ export function MusicLibrary({
                     <div className="flex gap-4">
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-[var(--bg-primary)] shadow-lg">
                         {song.image_url ? (
-                          <img src={song.image_url} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          <img src={song.image_url || null} alt={song.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <Music className="w-8 h-8 text-[var(--text-secondary)] opacity-50" />

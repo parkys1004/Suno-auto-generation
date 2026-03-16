@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Music, Loader2, Search, ArrowUp
+  Music, Loader2, Search, ArrowUp, Play, Pause
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -254,6 +254,10 @@ export default function App() {
   // Audio Player State
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // API Settings Modal State
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
@@ -447,6 +451,62 @@ export default function App() {
     }
   }, [songs]);
 
+  useEffect(() => {
+    if (currentSong) {
+      const updatedSong = songs.find(s => s.id === currentSong.id);
+      if (updatedSong && (updatedSong.status !== currentSong.status || updatedSong.audio_url !== currentSong.audio_url)) {
+        setCurrentSong(updatedSong);
+      }
+    }
+  }, [songs, currentSong]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handlePlay = async () => {
+      if (isPlaying && currentSong?.audio_url) {
+        try {
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+          }
+        } catch (err: any) {
+          if (err.name === 'AbortError') {
+            console.log('Playback aborted');
+          } else if (err.name === 'NotAllowedError') {
+            setIsPlaying(false);
+          }
+        }
+      } else {
+        audio.pause();
+      }
+    };
+
+    handlePlay();
+  }, [isPlaying, currentSong?.audio_url]);
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+      setDuration(audioRef.current.duration);
+    }
+  };
+
+  const handleSeek = (time: number) => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = time;
+      setCurrentTime(time);
+    }
+  };
+
+  const handleVolumeChange = (vol: number) => {
+    setVolume(vol);
+    if (audioRef.current) {
+      audioRef.current.volume = vol;
+    }
+  };
+
   const playSong = (song: Song) => {
     if (currentSong?.id === song.id) {
       setIsPlaying(!isPlaying);
@@ -484,7 +544,7 @@ export default function App() {
             });
             
             let data = response.data;
-            console.log(`Status for ${currentTaskId}:`, data);
+            console.log(`Status check for ${currentTaskId}:`, data);
 
             // Handle common wrapper formats
             if (data && data.code === 200 && data.data) {
@@ -500,39 +560,46 @@ export default function App() {
               if (Array.isArray(data)) {
                 sunoData = data;
                 // If it's an array, we assume it's successful if we have data
-                status = sunoData.every(s => s.status === 'complete' || s.audio_url) ? 'SUCCESS' : 'PROCESSING';
+                const allHaveAudio = sunoData.every(s => s.audioUrl || s.audio_url || s.url || s.play_url || s.cdn_url);
+                status = allHaveAudio ? 'SUCCESS' : 'PROCESSING';
               } else {
-                status = data.status || '';
-                errorMessage = data.errorMessage || data.error || '';
+                status = data.status || data.state || '';
+                errorMessage = data.errorMessage || data.error || data.msg || '';
                 sunoData = data.response?.sunoData || data.data || (Array.isArray(data.songs) ? data.songs : []);
                 
                 // If sunoData is still empty, maybe the object itself is the song
-                if (sunoData.length === 0 && (data.id || data.audio_url)) {
+                if (sunoData.length === 0 && (data.id || data.audio_url || data.audioUrl || data.url)) {
                   sunoData = [data];
                 }
               }
               
               const isError = status === 'FAILED' || status === 'ERROR' || status === 'error' || errorMessage;
-              const isSuccess = status === 'SUCCESS' || status === 'complete' || status === 'COMPLETED' || status === 'FINISHED' || 
-                               status === 'FIRST_SUCCESS' || status === 'TEXT_SUCCESS' ||
-                               (sunoData.length > 0 && sunoData.every(s => s.audio_url || s.status === 'complete'));
+              
+              // Only consider it a final success if we actually have audio URLs for all songs in the task
+              const hasAudioUrls = sunoData.length > 0 && sunoData.every(s => s.audioUrl || s.audio_url || s.url || s.play_url || s.cdn_url || s.stream_url);
+              
+              const isSuccess = (status === 'SUCCESS' || status === 'complete' || status === 'COMPLETED' || status === 'FINISHED' || 
+                               status === 'FIRST_SUCCESS' || status === 'TEXT_SUCCESS' || status === 'done') && hasAudioUrls;
 
-              if (isSuccess || isError || status === 'PROCESSING' || status === 'streaming' || status === 'QUEUED') {
+              if (isSuccess || isError || status === 'PROCESSING' || status === 'streaming' || status === 'QUEUED' || status === 'SUCCESS' || status === 'complete' || status === 'pending') {
                 if (sunoData.length > 0) {
                   setSongs(prev => {
                     const updated = [...prev];
                     sunoData.forEach((newSong: any, index: number) => {
+                      const audioUrl = newSong.audioUrl || newSong.audio_url || newSong.url || newSong.play_url || newSong.cdn_url || newSong.stream_url || '';
+                      if (audioUrl) console.log(`Found audio URL for ${newSong.id || currentTaskId}: ${audioUrl}`);
+                      
                       const mappedSong: Song = {
-                        id: newSong.id || newSong.song_id || (sunoData.length > 1 ? `${currentTaskId}_${index}` : currentTaskId),
+                        id: newSong.id || newSong.song_id || newSong.audio_id || (sunoData.length > 1 ? `${currentTaskId}_${index}` : currentTaskId),
                         title: newSong.title || 'Untitled',
-                        image_url: newSong.imageUrl || newSong.image_url || '',
-                        lyric: newSong.prompt || newSong.lyric || '',
-                        audio_url: newSong.audioUrl || newSong.audio_url || '',
-                        video_url: newSong.videoUrl || newSong.video_url || '',
+                        image_url: newSong.imageUrl || newSong.image_url || newSong.image || newSong.metadata?.image_url || '',
+                        lyric: newSong.prompt || newSong.lyric || newSong.lyrics || newSong.metadata?.prompt || '',
+                        audio_url: audioUrl,
+                        video_url: newSong.videoUrl || newSong.video_url || newSong.video || '',
                         created_at: newSong.createTime || newSong.created_at || new Date().toISOString(),
                         model_name: newSong.modelName || newSong.model || '',
-                        status: isError ? 'error' : (isSuccess && status !== 'streaming') ? 'complete' : 'streaming',
-                        tags: newSong.tags || '',
+                        status: isError ? 'error' : (isSuccess && audioUrl) ? 'complete' : 'streaming',
+                        tags: newSong.tags || newSong.style || newSong.metadata?.tags || '',
                         duration: newSong.duration?.toString() || '',
                         taskId: currentTaskId
                       };
@@ -682,6 +749,21 @@ export default function App() {
       
       throw e;
     }
+  };
+
+  const recheckStatus = async (song: Song) => {
+    if (!song.taskId) {
+      setError('태스크 ID를 찾을 수 없어 상태를 확인할 수 없습니다.');
+      return;
+    }
+    
+    setTaskIds(prev => {
+      if (!prev.includes(song.taskId!)) {
+        return [...prev, song.taskId!];
+      }
+      return prev;
+    });
+    setSuccess('상태를 다시 확인하는 중입니다...');
   };
 
   const handleGeneratePrompt = async (shouldSwitchTab: boolean = true): Promise<GeneratedPrompt | null> => {
@@ -1576,8 +1658,64 @@ export default function App() {
           currentSong={currentSong}
           isPlaying={isPlaying}
           setIsPlaying={setIsPlaying}
+          recheckStatus={recheckStatus}
+          currentTime={currentTime}
+          duration={duration}
+          volume={volume}
+          onSeek={handleSeek}
+          onVolumeChange={handleVolumeChange}
         />
       </div>
+
+      {/* Global Audio Element */}
+      <audio 
+        ref={audioRef}
+        src={currentSong?.audio_url ? `/api/proxy/audio?url=${encodeURIComponent(currentSong.audio_url)}` : null}
+        onTimeUpdate={handleTimeUpdate}
+        onEnded={() => setIsPlaying(false)}
+        onLoadedMetadata={handleTimeUpdate}
+        referrerPolicy="no-referrer"
+        onError={(e) => {
+          if (currentSong?.audio_url && e.currentTarget.src.includes('/api/proxy/audio')) {
+            e.currentTarget.src = currentSong.audio_url;
+          }
+        }}
+      />
+
+      {/* Persistent Mini Player (Mobile & Desktop) */}
+      <AnimatePresence>
+        {currentSong && (
+          <motion.div 
+            initial={{ y: 100 }}
+            animate={{ y: 0 }}
+            exit={{ y: 100 }}
+            className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--bg-secondary)] border-t border-[var(--border-color)] p-3 shadow-2xl lg:hidden"
+          >
+            <div className="flex items-center gap-4 max-w-screen-xl mx-auto">
+              <div className="w-12 h-12 rounded-lg overflow-hidden bg-[var(--bg-primary)] border border-[var(--border-color)] shrink-0">
+                {currentSong.image_url ? (
+                  <img src={currentSong.image_url || null} alt={currentSong.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"><Music className="w-6 h-6 opacity-20" /></div>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-bold text-[var(--text-primary)] truncate">{currentSong.title || 'Untitled'}</h4>
+                <p className="text-xs text-[var(--text-secondary)] truncate">{currentSong.tags}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setIsPlaying(!isPlaying)}
+                  className="w-10 h-10 bg-[var(--text-primary)] rounded-full flex items-center justify-center text-[var(--bg-primary)]"
+                >
+                  {isPlaying ? <Pause className="w-5 h-5 fill-current" /> : <Play className="w-5 h-5 fill-current ml-0.5" />}
+                </button>
+              </div>
+            </div>
+            <div className="absolute top-0 left-0 h-0.5 bg-[var(--accent-primary)] transition-all duration-300" style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* API Settings Modal */}
       <AnimatePresence>

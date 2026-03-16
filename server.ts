@@ -410,8 +410,13 @@ async function startServer() {
   app.get('/api/proxy/audio', async (req, res) => {
     try {
       const audioUrl = req.query.url as string;
-      if (!audioUrl) {
-        return res.status(400).send('URL is required');
+      if (!audioUrl || audioUrl === 'undefined' || audioUrl === 'null' || audioUrl === '') {
+        return res.status(400).send('Valid URL is required');
+      }
+
+      // Basic URL validation
+      if (!audioUrl.startsWith('http')) {
+        return res.status(400).send('Invalid URL format');
       }
 
       console.log(`Proxying audio request: ${audioUrl}`);
@@ -421,20 +426,46 @@ async function startServer() {
         responseType: 'stream',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://suno.com/'
-        }
+          'Referer': 'https://suno.com/',
+          'Accept': '*/*'
+        },
+        timeout: 20000,
+        maxRedirects: 5
       });
 
       // Set appropriate headers
-      res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
+      const contentType = response.headers['content-type'] || 'audio/mpeg';
+      res.setHeader('Content-Type', contentType);
+      
       if (response.headers['content-length']) {
         res.setHeader('Content-Length', response.headers['content-length']);
       }
+      
+      // Enable range requests if possible
+      if (response.headers['accept-ranges']) {
+        res.setHeader('Accept-Ranges', response.headers['accept-ranges']);
+      }
+
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
 
       response.data.pipe(res);
+
+      // Handle stream errors
+      response.data.on('error', (err: any) => {
+        console.error('Stream error:', err.message);
+        if (!res.headersSent) {
+          res.status(500).send('Stream error');
+        }
+        res.end();
+      });
+
     } catch (error: any) {
       console.error('Audio proxy error:', error.message);
+      if (error.response) {
+        console.error('Target API responded with:', error.response.status);
+        return res.status(error.response.status).send(`Proxy target error: ${error.response.status}`);
+      }
       res.status(500).send('Failed to proxy audio');
     }
   });
