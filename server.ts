@@ -24,11 +24,6 @@ async function startServer() {
   const sanitizeKey = (key: string | null) => {
     if (!key) return '';
     let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
-    // Remove surrounding quotes if present
-    if ((sanitized.startsWith('"') && sanitized.endsWith('"')) || 
-        (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
-      sanitized = sanitized.slice(1, -1).trim();
-    }
     if (sanitized.toLowerCase().startsWith('bearer ')) {
       sanitized = sanitized.slice(7).trim();
     }
@@ -36,7 +31,7 @@ async function startServer() {
   };
 
   // API route to proxy requests to Suno API
-  app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
+  app.post('/api/suno/generate', async (req, res) => {
     try {
       const { apiKey: rawApiKey, prompt, make_instrumental, tags, title, baseUrl, model, negativeTags, vocalGender } = req.body;
       const apiKey = sanitizeKey(rawApiKey);
@@ -73,41 +68,18 @@ async function startServer() {
         callBackUrl: "https://example.com/callback"
       };
 
-      const performRequest = async (url: string) => {
-        console.log(`Proxying generate to: ${url}`);
-        return await axios.post(
-          url,
-          payload,
-          {
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 30000,
-            validateStatus: (status) => status < 500 // Don't throw on 4xx
-          }
-        );
-      };
-
-      let response = await performRequest(`${apiUrl}/generate`);
-      
-      // If 405 Method Not Allowed, try with trailing slash
-      if (response.status === 405) {
-        console.log('Received 405, retrying with trailing slash...');
-        response = await performRequest(`${apiUrl}/generate/`);
-      }
-
-      // If still error, return it
-      if (response.status >= 400) {
-        if (response.status === 401) {
-          return res.status(401).json({
-            error: 'API 인증 실패 (401 Unauthorized)',
-            message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요. (예: Vessel 사용 시 Base URL을 https://api.vessel.ai/v1 으로 설정)',
-            details: response.data
-          });
+      console.log(`Proxying generate to: ${apiUrl}/generate`);
+      const response = await axios.post(
+        `${apiUrl}/generate`,
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000
         }
-        return res.status(response.status).json(response.data);
-      }
+      );
 
       res.json(response.data);
     } catch (error: any) {
@@ -121,7 +93,7 @@ async function startServer() {
     }
   });
 
-  app.post(/.*\/suno\/wav\/generate\/?$/, async (req, res) => {
+  app.post('/api/suno/wav/generate', async (req, res) => {
     try {
       const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = req.body;
       const apiKey = sanitizeKey(rawApiKey);
@@ -148,39 +120,18 @@ async function startServer() {
         callBackUrl: callBackUrl || 'https://example.com/callback'
       };
 
-      const performRequest = async (url: string) => {
-        console.log(`Proxying WAV generate to: ${url}`);
-        return await axios.post(
-          url,
-          payload,
-          {
-            headers: {
-              'Authorization': `Bearer ${apiKey}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 30000,
-            validateStatus: (status) => status < 500
-          }
-        );
-      };
-
-      let response = await performRequest(`${apiUrl}/wav/generate`);
-      
-      if (response.status === 405) {
-        console.log('Received 405, retrying with trailing slash...');
-        response = await performRequest(`${apiUrl}/wav/generate/`);
-      }
-
-      if (response.status >= 400) {
-        if (response.status === 401) {
-          return res.status(401).json({
-            error: 'API 인증 실패 (401 Unauthorized)',
-            message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요.',
-            details: response.data
-          });
+      console.log(`Proxying WAV generate to: ${apiUrl}/wav/generate`);
+      const response = await axios.post(
+        `${apiUrl}/wav/generate`,
+        payload,
+        {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          timeout: 30000
         }
-        return res.status(response.status).json(response.data);
-      }
+      );
 
       res.json(response.data);
     } catch (error: any) {
@@ -194,10 +145,9 @@ async function startServer() {
     }
   });
 
-  app.get(/.*\/suno\/status\/[^\/]+\/?$/, async (req, res) => {
+  app.get('/api/suno/status/:id', async (req, res) => {
     try {
-      const pathParts = req.path.split('/');
-      const id = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+      const { id } = req.params;
       const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
       let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
 
@@ -226,13 +176,6 @@ async function startServer() {
         });
         return res.json(response.data);
       } catch (innerError: any) {
-        if (innerError.response?.status === 401) {
-          return res.status(401).json({
-            error: 'API 인증 실패 (401 Unauthorized)',
-            message: '상태 확인 중 인증 오류가 발생했습니다. API 키와 Base URL이 일치하는지 확인해주세요.',
-            details: innerError.response.data
-          });
-        }
         // If it's a 404 or 405, try the other common endpoint
         if (innerError.response?.status === 404 || innerError.response?.status === 405) {
           const fallbackUrl = `${apiUrl}/status/${id}`;

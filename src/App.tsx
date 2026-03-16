@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Music, Loader2, Search, ArrowUp, X
+  Music, Loader2, Search, ArrowUp
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,72 +65,10 @@ export default function App() {
   const sanitizeKey = (key: string | null) => {
     if (!key) return '';
     let sanitized = key.replace(/[^\x20-\x7E]/g, '').trim();
-    // Remove surrounding quotes if present
-    if ((sanitized.startsWith('"') && sanitized.endsWith('"')) || 
-        (sanitized.startsWith("'") && sanitized.endsWith("'"))) {
-      sanitized = sanitized.slice(1, -1).trim();
-    }
     if (sanitized.toLowerCase().startsWith('bearer ')) {
       sanitized = sanitized.slice(7).trim();
     }
     return sanitized;
-  };
-
-  const apiPost = async (url: string, data: any, config: any = {}) => {
-    const targetUrl = url.startsWith('http') ? url : (url.startsWith('/') ? url : `/${url}`);
-    try {
-      return await axios.post(targetUrl, data, config);
-    } catch (err: any) {
-      const status = err.response?.status;
-      console.error(`API POST Error [${targetUrl}]:`, status, err.response?.data || err.message);
-      
-      if (status === 405 && !targetUrl.endsWith('/')) {
-        const retryUrl = `${targetUrl}/`;
-        console.log(`Retrying POST ${targetUrl} as ${retryUrl} due to 405`);
-        return await axios.post(retryUrl, data, config);
-      }
-      throw err;
-    }
-  };
-
-  const apiGet = async (url: string, config: any = {}) => {
-    const targetUrl = url.startsWith('http') ? url : (url.startsWith('/') ? url : `/${url}`);
-    try {
-      return await axios.get(targetUrl, config);
-    } catch (err: any) {
-      const status = err.response?.status;
-      console.error(`API GET Error [${targetUrl}]:`, status, err.response?.data || err.message);
-      
-      if (status === 405 && !targetUrl.split('?')[0].endsWith('/')) {
-        const [path, query] = targetUrl.split('?');
-        const retryUrl = `${path}/${query ? `?${query}` : ''}`;
-        console.log(`Retrying GET ${targetUrl} as ${retryUrl} due to 405`);
-        return await axios.get(retryUrl, config);
-      }
-      throw err;
-    }
-  };
-
-  const parseJsonSafe = (text: string) => {
-    if (!text) return {};
-    try {
-      // Remove potential markdown code blocks
-      let cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim();
-      
-      // Try to find the first { and last } to extract the JSON object
-      const start = cleaned.indexOf('{');
-      const end = cleaned.lastIndexOf('}');
-      
-      if (start !== -1 && end !== -1 && end > start) {
-        cleaned = cleaned.substring(start, end + 1);
-      }
-      
-      return JSON.parse(cleaned);
-    } catch (err) {
-      console.error('JSON Parse Error:', err, 'Original text:', text);
-      // If it's a simple string that failed, try to return it as a message
-      return { error: 'JSON parsing failed', originalText: text };
-    }
   };
 
   const safeString = (val: any, fallback: string = ''): string => {
@@ -162,10 +100,6 @@ export default function App() {
 
   const [apiKey, setApiKey] = useState(() => sanitizeKey(localStorage.getItem('suno_api_key')));
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('suno_base_url') || 'https://api.sunoapi.org/api/v1');
-
-  useEffect(() => {
-    localStorage.setItem('suno_base_url', baseUrl);
-  }, [baseUrl]);
   
   // Form States
   const [description, setDescription] = useState('');
@@ -347,7 +281,7 @@ export default function App() {
     
     setIsGeneratingWav(prev => ({ ...prev, [song.id]: true }));
     try {
-      const response = await apiPost('/api/suno/wav/generate', {
+      const response = await axios.post('/api/suno/wav/generate', {
         apiKey,
         baseUrl,
         taskId: song.taskId || song.id,
@@ -515,7 +449,7 @@ export default function App() {
         
         for (const currentTaskId of currentTaskIds) {
           try {
-            const response = await apiGet(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const response = await axios.get(`/api/suno/status/${currentTaskId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -637,7 +571,7 @@ export default function App() {
         for (const songId of taskIds) {
           const tId = wavPollingTasks[songId];
           try {
-            const response = await apiGet(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const response = await axios.get(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -748,7 +682,7 @@ export default function App() {
             responseMimeType: 'application/json',
           }
         });
-        const data = parseJsonSafe(response.text || '{}');
+        const data = JSON.parse(response.text || '{}');
         title = safeString(data.title, '제목 없음');
         lyrics = safeString(data.lyrics, '가사 없음');
         style_prompt = safeString(data.style_prompt, allTags);
@@ -766,7 +700,7 @@ export default function App() {
           })
         });
         const data = await response.json();
-        const parsed = parseJsonSafe(data.choices[0].message.content);
+        const parsed = JSON.parse(data.choices[0].message.content);
         title = safeString(parsed.title, '제목 없음');
         lyrics = safeString(parsed.lyrics, '가사 없음');
         style_prompt = safeString(parsed.style_prompt, allTags);
@@ -846,7 +780,7 @@ export default function App() {
             responseMimeType: 'application/json',
           }
         });
-        data = parseJsonSafe(response.text || '{}');
+        data = JSON.parse(response.text || '{}');
       } else {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -861,11 +795,10 @@ export default function App() {
           })
         });
         const resData = await response.json();
-        data = parseJsonSafe(resData.choices[0].message.content);
+        data = JSON.parse(resData.choices[0].message.content);
       }
 
       if (data) {
-        console.log('AI Auto Setup Data:', data);
         if (Array.isArray(data.genres)) setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.subGenres)) setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
         if (Array.isArray(data.moods)) setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
@@ -963,9 +896,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -992,7 +925,7 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await apiPost('/api/suno/generate', payload);
+        const response = await axios.post('/api/suno/generate', payload);
         
         console.log('Generate Response (From Prompt):', response.data);
 
@@ -1000,14 +933,8 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
-          const code = response.data.code;
           const msg = response.data.message || response.data.error || '';
-          let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
-          
-          if (code === 401) {
-            fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
-          }
-          
+          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
@@ -1028,14 +955,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      const status = err.response?.status;
-      const errorData = err.response?.data;
-      
-      if (status === 401) {
-        setError('API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.');
-      } else {
-        setError(errorData?.error || errorData?.message || err.message || '음악 생성 요청에 실패했습니다.');
-      }
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1087,9 +1007,9 @@ export default function App() {
 
     try {
       let gender = '';
-      if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
+      if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
         gender = 'f';
-      } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
+      } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
         gender = 'm';
       }
 
@@ -1123,7 +1043,7 @@ export default function App() {
           callBackUrl: "https://example.com/callback"
         };
 
-        const response = await apiPost('/api/suno/generate', payload);
+        const response = await axios.post('/api/suno/generate', payload);
         
         console.log('Generate Response (Direct):', response.data);
 
@@ -1131,14 +1051,8 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
-          const code = response.data.code;
           const msg = response.data.message || response.data.error || '';
-          let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
-          
-          if (code === 401) {
-            fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
-          }
-          
+          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
@@ -1159,14 +1073,7 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      const status = err.response?.status;
-      const errorData = err.response?.data;
-      
-      if (status === 401) {
-        setError('API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.');
-      } else {
-        setError(errorData?.error || errorData?.message || err.message || '음악 생성 요청에 실패했습니다.');
-      }
+      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1206,9 +1113,9 @@ export default function App() {
         setGenerationProgress(prev => ({ ...prev, current: currentIdx }));
         try {
           let gender = '';
-          if (vocalGenders.some(t => (t.label || '').includes('여성') || (t.label || '').toLowerCase().includes('female'))) {
+          if (vocalGenders.some(t => t.label.includes('여성') || t.label.toLowerCase().includes('female'))) {
             gender = 'f';
-          } else if (vocalGenders.some(t => (t.label || '').includes('남성') || (t.label || '').toLowerCase().includes('male'))) {
+          } else if (vocalGenders.some(t => t.label.includes('남성') || t.label.toLowerCase().includes('male'))) {
             gender = 'm';
           }
 
@@ -1229,21 +1136,15 @@ export default function App() {
             callBackUrl: "https://example.com/callback"
           };
 
-          const response = await apiPost('/api/suno/generate', payload);
+          const response = await axios.post('/api/suno/generate', payload);
           
           if (response.data?.code === 200 && response.data?.data?.taskId) {
             const taskId = response.data.data.taskId;
             newTaskIds.push(taskId);
             setTaskIds(prev => [...prev, ...taskId.split(',')]);
           } else if (response.data?.code && response.data.code !== 200) {
-            const code = response.data.code;
             const msg = response.data.message || response.data.error || '';
-            let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
-            
-            if (code === 401) {
-              fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
-            }
-            
+            const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
             setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
             hasError = true;
           } else if (Array.isArray(response.data) && response.data.length > 0) {
@@ -1629,7 +1530,6 @@ export default function App() {
         apiKey={apiKey}
         setApiKey={setApiKey}
         baseUrl={baseUrl}
-        setBaseUrl={setBaseUrl}
       />
 
       <style dangerouslySetInnerHTML={{ __html: `

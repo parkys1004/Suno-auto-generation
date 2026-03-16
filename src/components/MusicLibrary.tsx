@@ -40,10 +40,8 @@ export function MusicLibrary({
   };
 
   const filteredSongs = songs.filter(s => {
-    const title = s.title || '';
-    const tags = s.tags || '';
-    const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          tags.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = s.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                          s.tags.toLowerCase().includes(searchQuery.toLowerCase());
     if (filter === 'complete') return matchesSearch && s.status === 'complete';
     if (filter === 'favorite') return matchesSearch && s.isFavorite;
     return matchesSearch;

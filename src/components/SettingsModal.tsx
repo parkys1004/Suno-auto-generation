@@ -16,7 +16,6 @@ interface SettingsModalProps {
   apiKey: string;
   setApiKey: (key: string) => void;
   baseUrl: string;
-  setBaseUrl: (url: string) => void;
 }
 
 export function SettingsModal({
@@ -30,8 +29,7 @@ export function SettingsModal({
   setChatgptApiKey,
   apiKey,
   setApiKey,
-  baseUrl,
-  setBaseUrl
+  baseUrl
 }: SettingsModalProps) {
   const [geminiTestStatus, setGeminiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [chatgptTestStatus, setChatgptTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -69,20 +67,15 @@ export function SettingsModal({
     if (!apiKey) return;
     setSunoTestStatus('testing');
     try {
-      // Use the same robustness as the main app
-      const response = await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
+      await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
       setSunoTestStatus('success');
     } catch (e: any) {
-      // If it's a 405, it might be a trailing slash issue, but for a test we can be simpler
       if (e.response?.status === 401) {
         setSunoTestStatus('error');
-      } else if (e.response?.status === 404 || e.response?.status === 405) {
-        // Some APIs return 404/405 for a 'test' ID, but if we got a response it means the proxy is working
-        setSunoTestStatus('success');
       } else {
-        setSunoTestStatus('error');
+        setSunoTestStatus('success');
       }
     }
   };
@@ -153,9 +146,6 @@ export function SettingsModal({
                     value={promptModel === 'gemini' ? geminiApiKey : chatgptApiKey}
                     onChange={(e) => {
                       let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
-                      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-                        val = val.slice(1, -1).trim();
-                      }
                       if (val.toLowerCase().startsWith('bearer ')) {
                         val = val.slice(7).trim();
                       }
@@ -206,9 +196,6 @@ export function SettingsModal({
                     value={apiKey}
                     onChange={(e) => {
                       let val = e.target.value.replace(/[^\x20-\x7E]/g, '').trim();
-                      if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-                        val = val.slice(1, -1).trim();
-                      }
                       if (val.toLowerCase().startsWith('bearer ')) {
                         val = val.slice(7).trim();
                       }
@@ -226,38 +213,6 @@ export function SettingsModal({
                     {sunoTestStatus === 'testing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '테스트'}
                   </button>
                 </div>
-                
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-[var(--text-secondary)]">API Base URL (Endpoint)</label>
-                  <input
-                    type="text"
-                    value={baseUrl}
-                    onChange={(e) => {
-                      setBaseUrl(e.target.value.trim());
-                      setSunoTestStatus('idle');
-                    }}
-                    placeholder="https://api.sunoapi.org/api/v1"
-                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-colors placeholder:text-[var(--text-secondary)]"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    <button 
-                      onClick={() => setBaseUrl('https://api.sunoapi.org/api/v1')}
-                      className="px-2 py-1 bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[10px] text-[var(--text-secondary)] transition-colors"
-                    >
-                      SunoAPI.org (기본)
-                    </button>
-                    <button 
-                      onClick={() => setBaseUrl('https://api.vessel.ai/v1/suno')}
-                      className="px-2 py-1 bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[10px] text-[var(--text-secondary)] transition-colors"
-                    >
-                      Vessel.ai
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                    * API 키와 Base URL이 일치해야 합니다. (예: Vessel 키 사용 시 Vessel.ai 선택)
-                  </p>
-                </div>
-
                 <div className="flex items-center justify-between">
                   <a 
                     href="https://sunoapi.org/ko/api-key" 

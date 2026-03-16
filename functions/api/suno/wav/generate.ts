@@ -1,32 +1,25 @@
 export const onRequest = async (context: any) => {
   const { request } = context;
-  const method = request.method.toUpperCase();
   
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Max-Age': '86400',
-  };
-
-  if (method === 'OPTIONS') {
+  if (request.method === 'OPTIONS') {
     return new Response(null, {
-      headers: corsHeaders,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      },
     });
   }
 
-  if (method !== 'POST') {
-    return new Response(JSON.stringify({ error: `Method ${method} Not Allowed` }), {
+  if (request.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
       status: 405,
-      headers: { 
-        ...corsHeaders,
-        'Content-Type': 'application/json' 
-      }
+      headers: { 'Content-Type': 'application/json' }
     });
   }
   
   try {
-    const body: any = await request.json().catch(() => ({}));
+    const body: any = await request.json();
     const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = body;
 
     const sanitizeKey = (key: string | null) => {
@@ -65,36 +58,21 @@ export const onRequest = async (context: any) => {
       callBackUrl: callBackUrl || 'https://example.com/callback'
     };
 
-    const performRequest = async (url: string) => {
-      return await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-    };
+    const response = await fetch(`${apiUrl}/wav/generate`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
 
-    let response = await performRequest(`${apiUrl}/wav/generate`);
-    
-    if (response.status === 405) {
-      response = await performRequest(`${apiUrl}/wav/generate/`);
-    }
-
-    const data = await response.text();
-    let jsonData;
-    try {
-      jsonData = JSON.parse(data);
-    } catch (e) {
-      jsonData = { message: data };
-    }
-
-    return new Response(JSON.stringify(jsonData), {
+    const data = await response.json();
+    return new Response(JSON.stringify(data), {
       status: response.status,
       headers: { 
-        ...corsHeaders,
         'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
       }
     });
   } catch (error: any) {

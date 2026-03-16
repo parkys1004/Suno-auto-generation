@@ -51,14 +51,11 @@ export function PromptLibrary({
     });
   };
 
-  const filteredPrompts = prompts.filter(p => {
-    const title = p.title || '';
-    const lyrics = p.lyrics || '';
-    const style_prompt = p.style_prompt || '';
-    return title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-           lyrics.toLowerCase().includes(searchQuery.toLowerCase()) ||
-           style_prompt.toLowerCase().includes(searchQuery.toLowerCase());
-  });
+  const filteredPrompts = prompts.filter(p => 
+    p.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    p.lyrics.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.style_prompt.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const sortedPrompts = [...filteredPrompts].sort((a, b) => {
     if (sortBy === 'newest') return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
