@@ -51,7 +51,8 @@ export function PromptLibrary({
     });
   };
 
-  const filteredPrompts = prompts.filter(p => {
+  const filteredPrompts = (prompts || []).filter(p => {
+    if (!p) return false;
     const title = p.title || '';
     const lyrics = p.lyrics || '';
     const style_prompt = p.style_prompt || '';

@@ -39,7 +39,8 @@ export function MusicLibrary({
     setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
   };
 
-  const filteredSongs = songs.filter(s => {
+  const filteredSongs = (songs || []).filter(s => {
+    if (!s) return false;
     const title = s.title || '';
     const tags = s.tags || '';
     const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 

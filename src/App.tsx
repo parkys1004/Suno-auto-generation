@@ -687,16 +687,16 @@ export default function App() {
 
     try {
       const allTags = [
-        ...genres.map(t => t.label),
-        ...subGenres.map(t => t.label),
+        ...(genres || []).map(t => t && t.label),
+        ...(subGenres || []).map(t => t && t.label),
         musicType === 'instrumental' ? 'instrumental' : '',
-        ...vocalTypes.map(t => t.label),
-        ...vocalGenders.map(t => t.label),
+        ...(vocalTypes || []).map(t => t && t.label),
+        ...(vocalGenders || []).map(t => t && t.label),
         `${tempo}bpm`,
-        ...moods.map(t => t.label),
-        ...instruments.map(t => t.label),
+        ...(moods || []).map(t => t && t.label),
+        ...(instruments || []).map(t => t && t.label),
         subLanguage ? `${mainLanguage} ${100 - subLanguageRatio}%, ${subLanguage} ${subLanguageRatio}%` : mainLanguage,
-        ...excludedElements.map(t => `no ${t.label}`)
+        ...(excludedElements || []).map(t => t && `no ${t.label}`)
       ].filter(Boolean).join(', ');
 
       const lengthDescription = `공백 포함 약 ${lyricsLengthWithSpaces}자, 공백 제외 약 ${lyricsLengthWithoutSpaces}자 내외의 분량 (지정된 장르에 최적화된 구조 적용)`;
@@ -894,12 +894,24 @@ export default function App() {
       }
 
       if (data) {
-        if (Array.isArray(data.genres)) setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
-        if (Array.isArray(data.subGenres)) setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
-        if (Array.isArray(data.moods)) setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
-        if (Array.isArray(data.instruments)) setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: safeString(i) })));
-        if (Array.isArray(data.vocalGenders)) setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
-        if (Array.isArray(data.vocalTypes)) setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: safeString(v) })));
+        if (data.genres && Array.isArray(data.genres)) {
+          setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        }
+        if (data.subGenres && Array.isArray(data.subGenres)) {
+          setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        }
+        if (data.moods && Array.isArray(data.moods)) {
+          setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
+        }
+        if (data.instruments && Array.isArray(data.instruments)) {
+          setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: safeString(i) })));
+        }
+        if (data.vocalGenders && Array.isArray(data.vocalGenders)) {
+          setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+        }
+        if (data.vocalTypes && Array.isArray(data.vocalTypes)) {
+          setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: safeString(v) })));
+        }
         if (data.musicType) setMusicType(String(data.musicType).toLowerCase() as any);
         if (data.tempo) setTempo(Number(data.tempo) || 80);
         if (data.mainLanguage) setMainLanguage(String(data.mainLanguage));
@@ -1014,7 +1026,7 @@ export default function App() {
           prompt: promptToUse.lyrics || "",
           tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: requestTitle || "",
-          negativeTags: excludedElements.map(t => t.label).join(', ') || "",
+          negativeTags: (excludedElements || []).map(t => t && t.label).filter(Boolean).join(', ') || "",
           vocalGender: gender || "",
           styleWeight: 0.65,
           weirdnessConstraint: 0.65,
@@ -1027,8 +1039,8 @@ export default function App() {
         console.log('Generate Response (From Prompt):', response.data);
 
         if (response.data?.code === 200 && response.data?.data?.taskId) {
-          const taskId = response.data.data.taskId;
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          const taskId = String(response.data.data.taskId);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         } else if (response.data?.code && response.data.code !== 200) {
           const msg = response.data.message || response.data.error || '';
           const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
@@ -1036,14 +1048,14 @@ export default function App() {
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
           setSongs(prev => [...slicedData, ...prev]);
-          const ids = slicedData.map((s: any) => s.id);
+          const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
           setTaskIds(prev => [...prev, ...ids]);
         } else if (response.data && response.data.task_id) {
-          const taskId = response.data.task_id;
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          const taskId = String(response.data.task_id);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         } else if (response.data && response.data.taskId) {
-          const taskId = response.data.taskId;
-          setTaskIds(prev => [...prev, ...taskId.split(',')]);
+          const taskId = String(response.data.taskId);
+          setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
         }
 
         // Add a small delay between requests if genCount > 1
@@ -1132,7 +1144,7 @@ export default function App() {
           prompt: promptToUse.lyrics || "",
           tags: promptToUse.style_prompt || promptToUse.tags || "",
           title: requestTitle || "",
-          negativeTags: excludedElements.map(t => safeString(t.label)).join(', ') || "",
+          negativeTags: (excludedElements || []).map(t => safeString(t && t.label)).filter(Boolean).join(', ') || "",
           vocalGender: gender || "",
           styleWeight: 0.65,
           weirdnessConstraint: 0.65,
@@ -1232,7 +1244,7 @@ export default function App() {
             prompt: promptToUse.lyrics || "",
             tags: promptToUse.style_prompt || promptToUse.tags || "",
             title: promptToUse.title || "",
-            negativeTags: excludedElements.map(t => safeString(t.label)).join(', ') || "",
+            negativeTags: (excludedElements || []).map(t => safeString(t && t.label)).filter(Boolean).join(', ') || "",
             vocalGender: gender || "",
             styleWeight: 0.65,
             weirdnessConstraint: 0.65,
@@ -1243,9 +1255,9 @@ export default function App() {
           const response = await axios.post('/api/suno/generate', payload);
           
           if (response.data?.code === 200 && response.data?.data?.taskId) {
-            const taskId = response.data.data.taskId;
+            const taskId = String(response.data.data.taskId);
             newTaskIds.push(taskId);
-            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+            setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
           } else if (response.data?.code && response.data.code !== 200) {
             const msg = response.data.message || response.data.error || '';
             const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
@@ -1254,17 +1266,17 @@ export default function App() {
           } else if (Array.isArray(response.data) && response.data.length > 0) {
             const slicedData = response.data.slice(0, 2);
             setSongs(prev => [...slicedData, ...prev]);
-            const ids = slicedData.map((s: any) => s.id);
+            const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
             newTaskIds.push(ids.join(','));
             setTaskIds(prev => [...prev, ...ids]);
           } else if (response.data && response.data.task_id) {
-            const taskId = response.data.task_id;
+            const taskId = String(response.data.task_id);
             newTaskIds.push(taskId);
-            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+            setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
           } else if (response.data && response.data.taskId) {
-            const taskId = response.data.taskId;
+            const taskId = String(response.data.taskId);
             newTaskIds.push(taskId);
-            setTaskIds(prev => [...prev, ...taskId.split(',')]);
+            setTaskIds(prev => [...prev, ...taskId.split(',').filter(id => id.trim())]);
           } else {
             setError(prev => prev ? `${prev}\n예상치 못한 응답 형식입니다.` : '예상치 못한 응답 형식입니다.');
             hasError = true;

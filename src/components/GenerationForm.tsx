@@ -166,8 +166,8 @@ export function GenerationForm({
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val && val !== '장르 선택...') {
-                            if (!genres.find(g => g.label === val)) {
-                              setGenres([...genres, { id: Math.random().toString(), label: val }]);
+                            if (!(genres || []).find(g => g && g.label === val)) {
+                              setGenres([...(genres || []), { id: Math.random().toString(), label: val }]);
                             }
                             e.target.value = '장르 선택...';
                           }
@@ -203,7 +203,7 @@ export function GenerationForm({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           if (genreInput.trim()) {
-                            setGenres([...genres, { id: Math.random().toString(), label: genreInput.trim() }]);
+                            setGenres([...(genres || []), { id: Math.random().toString(), label: genreInput.trim() }]);
                             setGenreInput('');
                             setIsAddingGenre(false);
                           }
@@ -215,7 +215,7 @@ export function GenerationForm({
                     <button 
                       onClick={() => {
                         if (genreInput.trim()) {
-                          setGenres([...genres, { id: Math.random().toString(), label: genreInput.trim() }]);
+                          setGenres([...(genres || []), { id: Math.random().toString(), label: genreInput.trim() }]);
                           setGenreInput('');
                           setIsAddingGenre(false);
                         }
@@ -236,9 +236,9 @@ export function GenerationForm({
                   </div>
                 )}
                 
-                {genres.length > 0 && (
+                {(genres || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {genres.map(tag => (
+                    {(genres || []).map(tag => tag && (
                       <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                         {tag.label}
                         <button onClick={() => removeTag(setGenres, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -257,8 +257,8 @@ export function GenerationForm({
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val && val !== '세부 장르 선택...') {
-                            if (!subGenres.find(g => g.label === val)) {
-                              setSubGenres([...subGenres, { id: Math.random().toString(), label: val }]);
+                            if (!(subGenres || []).find(g => g && g.label === val)) {
+                              setSubGenres([...(subGenres || []), { id: Math.random().toString(), label: val }]);
                             }
                             e.target.value = '세부 장르 선택...';
                           }
@@ -266,14 +266,14 @@ export function GenerationForm({
                         className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm appearance-none outline-none focus:border-[var(--accent-primary)]/50"
                       >
                         <option>세부 장르 선택...</option>
-                        {genres.length > 0 ? (
+                        {(genres || []).length > 0 ? (
                           // Show sub-genres for all selected main genres
-                          Array.from(new Set(genres.flatMap(g => SUB_GENRE_MAP[g.label] || []))).map(sub => (
+                          Array.from(new Set((genres || []).flatMap(g => (g && g.label) ? (SUB_GENRE_MAP[g.label] || []) : []))).map(sub => (
                             <option key={sub} value={sub}>{sub}</option>
                           ))
                         ) : (
                           // Show default sub-genres if no main genre is selected
-                          DEFAULT_SUB_GENRES.map(sub => (
+                          (DEFAULT_SUB_GENRES || []).map(sub => (
                             <option key={sub} value={sub}>{sub}</option>
                           ))
                         )}
@@ -296,7 +296,7 @@ export function GenerationForm({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           if (subGenreInput.trim()) {
-                            setSubGenres([...subGenres, { id: Math.random().toString(), label: subGenreInput.trim() }]);
+                            setSubGenres([...(subGenres || []), { id: Math.random().toString(), label: subGenreInput.trim() }]);
                             setSubGenreInput('');
                             setIsAddingSubGenre(false);
                           }
@@ -308,7 +308,7 @@ export function GenerationForm({
                     <button 
                       onClick={() => {
                         if (subGenreInput.trim()) {
-                          setSubGenres([...subGenres, { id: Math.random().toString(), label: subGenreInput.trim() }]);
+                          setSubGenres([...(subGenres || []), { id: Math.random().toString(), label: subGenreInput.trim() }]);
                           setSubGenreInput('');
                           setIsAddingSubGenre(false);
                         }
@@ -329,9 +329,9 @@ export function GenerationForm({
                   </div>
                 )}
 
-                {subGenres.length > 0 && (
+                {(subGenres || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {subGenres.map(tag => (
+                    {(subGenres || []).map(tag => tag && (
                       <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                         {tag.label}
                         <button onClick={() => removeTag(setSubGenres, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -375,8 +375,8 @@ export function GenerationForm({
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val && val !== '보컬 타입 선택...') {
-                              if (!vocalTypes.find(g => g.label === val)) {
-                                setVocalTypes([...vocalTypes, { id: Math.random().toString(), label: val }]);
+                              if (!(vocalTypes || []).find(g => g && g.label === val)) {
+                                setVocalTypes([...(vocalTypes || []), { id: Math.random().toString(), label: val }]);
                               }
                               e.target.value = '보컬 타입 선택...';
                             }
@@ -415,7 +415,7 @@ export function GenerationForm({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             if (vocalTypeInput.trim()) {
-                              setVocalTypes([...vocalTypes, { id: Math.random().toString(), label: vocalTypeInput.trim() }]);
+                              setVocalTypes([...(vocalTypes || []), { id: Math.random().toString(), label: vocalTypeInput.trim() }]);
                               setVocalTypeInput('');
                               setIsAddingVocalType(false);
                             }
@@ -427,7 +427,7 @@ export function GenerationForm({
                       <button 
                         onClick={() => {
                           if (vocalTypeInput.trim()) {
-                            setVocalTypes([...vocalTypes, { id: Math.random().toString(), label: vocalTypeInput.trim() }]);
+                            setVocalTypes([...(vocalTypes || []), { id: Math.random().toString(), label: vocalTypeInput.trim() }]);
                             setVocalTypeInput('');
                             setIsAddingVocalType(false);
                           }
@@ -448,9 +448,9 @@ export function GenerationForm({
                     </div>
                   )}
 
-                  {vocalTypes.length > 0 && (
+                  {(vocalTypes || []).length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {vocalTypes.map(tag => (
+                      {(vocalTypes || []).map(tag => tag && (
                         <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                           {tag.label}
                           <button onClick={() => removeTag(setVocalTypes, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -468,8 +468,8 @@ export function GenerationForm({
                           onChange={(e) => {
                             const val = e.target.value;
                             if (val && val !== '보컬 성별 선택...') {
-                              if (!vocalGenders.find(g => g.label === val)) {
-                                setVocalGenders([...vocalGenders, { id: Math.random().toString(), label: val }]);
+                              if (!(vocalGenders || []).find(g => g && g.label === val)) {
+                                setVocalGenders([...(vocalGenders || []), { id: Math.random().toString(), label: val }]);
                               }
                               e.target.value = '보컬 성별 선택...';
                             }
@@ -501,7 +501,7 @@ export function GenerationForm({
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             if (vocalGenderInput.trim()) {
-                              setVocalGenders([...vocalGenders, { id: Math.random().toString(), label: vocalGenderInput.trim() }]);
+                              setVocalGenders([...(vocalGenders || []), { id: Math.random().toString(), label: vocalGenderInput.trim() }]);
                               setVocalGenderInput('');
                               setIsAddingVocalGender(false);
                             }
@@ -513,7 +513,7 @@ export function GenerationForm({
                       <button 
                         onClick={() => {
                           if (vocalGenderInput.trim()) {
-                            setVocalGenders([...vocalGenders, { id: Math.random().toString(), label: vocalGenderInput.trim() }]);
+                            setVocalGenders([...(vocalGenders || []), { id: Math.random().toString(), label: vocalGenderInput.trim() }]);
                             setVocalGenderInput('');
                             setIsAddingVocalGender(false);
                           }
@@ -534,9 +534,9 @@ export function GenerationForm({
                     </div>
                   )}
 
-                  {vocalGenders.length > 0 && (
+                  {(vocalGenders || []).length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {vocalGenders.map(tag => (
+                      {(vocalGenders || []).map(tag => tag && (
                         <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                           {tag.label}
                           <button onClick={() => removeTag(setVocalGenders, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -623,7 +623,7 @@ export function GenerationForm({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           if (moodInput.trim()) {
-                            setMoods([...moods, { id: Math.random().toString(), label: moodInput.trim() }]);
+                            setMoods([...(moods || []), { id: Math.random().toString(), label: moodInput.trim() }]);
                             setMoodInput('');
                             setIsAddingMood(false);
                           }
@@ -635,7 +635,7 @@ export function GenerationForm({
                     <button 
                       onClick={() => {
                         if (moodInput.trim()) {
-                          setMoods([...moods, { id: Math.random().toString(), label: moodInput.trim() }]);
+                          setMoods([...(moods || []), { id: Math.random().toString(), label: moodInput.trim() }]);
                           setMoodInput('');
                           setIsAddingMood(false);
                         }
@@ -656,9 +656,9 @@ export function GenerationForm({
                   </div>
                 )}
 
-                {moods.length > 0 && (
+                {(moods || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {moods.map(tag => (
+                    {(moods || []).map(tag => tag && (
                       <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                         {tag.label}
                         <button onClick={() => removeTag(setMoods, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -677,8 +677,8 @@ export function GenerationForm({
                         onChange={(e) => {
                           const val = e.target.value;
                           if (val && val !== '악기 선택...') {
-                            if (!instruments.find(g => g.label === val)) {
-                              setInstruments([...instruments, { id: Math.random().toString(), label: val }]);
+                            if (!(instruments || []).find(g => g && g.label === val)) {
+                              setInstruments([...(instruments || []), { id: Math.random().toString(), label: val }]);
                             }
                             e.target.value = '악기 선택...';
                           }
@@ -717,7 +717,7 @@ export function GenerationForm({
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           if (instrumentInput.trim()) {
-                            setInstruments([...instruments, { id: Math.random().toString(), label: instrumentInput.trim() }]);
+                            setInstruments([...(instruments || []), { id: Math.random().toString(), label: instrumentInput.trim() }]);
                             setInstrumentInput('');
                             setIsAddingInstrument(false);
                           }
@@ -729,7 +729,7 @@ export function GenerationForm({
                     <button 
                       onClick={() => {
                         if (instrumentInput.trim()) {
-                          setInstruments([...instruments, { id: Math.random().toString(), label: instrumentInput.trim() }]);
+                          setInstruments([...(instruments || []), { id: Math.random().toString(), label: instrumentInput.trim() }]);
                           setInstrumentInput('');
                           setIsAddingInstrument(false);
                         }
@@ -750,9 +750,9 @@ export function GenerationForm({
                   </div>
                 )}
 
-                {instruments.length > 0 && (
+                {(instruments || []).length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {instruments.map(tag => (
+                    {(instruments || []).map(tag => tag && (
                       <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                         {tag.label}
                         <button onClick={() => removeTag(setInstruments, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
@@ -869,8 +869,8 @@ export function GenerationForm({
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val && val !== '제외 요소 선택...') {
-                          if (!excludedElements.find(g => g.label === val)) {
-                            setExcludedElements([...excludedElements, { id: Math.random().toString(), label: val }]);
+                          if (!(excludedElements || []).find(g => g && g.label === val)) {
+                            setExcludedElements([...(excludedElements || []), { id: Math.random().toString(), label: val }]);
                           }
                           e.target.value = '제외 요소 선택...';
                         }
@@ -903,7 +903,7 @@ export function GenerationForm({
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         if (excludedInput.trim()) {
-                          setExcludedElements([...excludedElements, { id: Math.random().toString(), label: excludedInput.trim() }]);
+                          setExcludedElements([...(excludedElements || []), { id: Math.random().toString(), label: excludedInput.trim() }]);
                           setExcludedInput('');
                           setIsAddingExcluded(false);
                         }
@@ -936,9 +936,9 @@ export function GenerationForm({
                 </div>
               )}
 
-              {excludedElements.length > 0 && (
+              {(excludedElements || []).length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {excludedElements.map(tag => (
+                  {(excludedElements || []).map(tag => tag && (
                     <span key={tag.id} className="flex items-center gap-1.5 bg-[var(--bg-secondary)] text-[var(--text-primary)] px-2.5 py-1 rounded-lg text-xs border border-[var(--border-color)]">
                       {tag.label}
                       <button onClick={() => removeTag(setExcludedElements, tag.id)}><X className="w-3 h-3 text-[var(--text-secondary)] hover:text-[var(--text-primary)]" /></button>
