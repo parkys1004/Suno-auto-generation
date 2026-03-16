@@ -406,6 +406,39 @@ async function startServer() {
     }
   });
 
+  // Proxy audio to avoid CORS issues
+  app.get('/api/proxy/audio', async (req, res) => {
+    try {
+      const audioUrl = req.query.url as string;
+      if (!audioUrl) {
+        return res.status(400).send('URL is required');
+      }
+
+      console.log(`Proxying audio request: ${audioUrl}`);
+      const response = await axios({
+        method: 'get',
+        url: audioUrl,
+        responseType: 'stream',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://suno.com/'
+        }
+      });
+
+      // Set appropriate headers
+      res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      response.data.pipe(res);
+    } catch (error: any) {
+      console.error('Audio proxy error:', error.message);
+      res.status(500).send('Failed to proxy audio');
+    }
+  });
+
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({

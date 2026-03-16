@@ -137,10 +137,11 @@ export function NowPlaying({ currentSong, isPlaying, setIsPlaying }: NowPlayingP
               
               <audio 
                 ref={audioRef} 
-                src={currentSong.audio_url} 
+                src={`/api/proxy/audio?url=${encodeURIComponent(currentSong.audio_url)}`} 
                 onTimeUpdate={handleTimeUpdate}
                 onEnded={() => setIsPlaying(false)}
                 onLoadedMetadata={handleTimeUpdate}
+                referrerPolicy="no-referrer"
               />
             </div>
 

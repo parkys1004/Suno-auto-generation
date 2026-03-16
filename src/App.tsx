@@ -325,11 +325,12 @@ export default function App() {
     
     const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.mp3`;
+    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
 
     try {
       if (dirHandle) {
         // 직접 폴더에 저장
-        const response = await fetch(song.audio_url);
+        const response = await fetch(proxyUrl);
         if (!response.ok) throw new Error('Network response was not ok');
         const blob = await response.blob();
         
@@ -338,14 +339,14 @@ export default function App() {
         await writable.write(blob);
         await writable.close();
         
-        alert(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
+        setSuccess(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
       } else {
         throw new Error('No directory handle');
       }
     } catch (err) {
       // 일반 다운로드 폴백 (Blob을 이용해 파일명 강제 지정)
       try {
-        const response = await fetch(song.audio_url);
+        const response = await fetch(proxyUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -355,6 +356,7 @@ export default function App() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
       } catch (fetchErr) {
         // Fetch 실패 시 최후의 수단
         const a = document.createElement('a');
@@ -374,11 +376,12 @@ export default function App() {
     
     const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.wav`;
+    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.wav_url)}`;
 
     try {
       if (dirHandle) {
         // 직접 폴더에 저장
-        const response = await fetch(song.wav_url);
+        const response = await fetch(proxyUrl);
         if (!response.ok) throw new Error('Network response was not ok');
         const blob = await response.blob();
         
@@ -387,14 +390,14 @@ export default function App() {
         await writable.write(blob);
         await writable.close();
         
-        alert(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
+        setSuccess(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
       } else {
         throw new Error('No directory handle');
       }
     } catch (err) {
       // 일반 다운로드 폴백 (Blob을 이용해 파일명 강제 지정)
       try {
-        const response = await fetch(song.wav_url);
+        const response = await fetch(proxyUrl);
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -404,6 +407,7 @@ export default function App() {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
       } catch (fetchErr) {
         // Fetch 실패 시 최후의 수단
         const a = document.createElement('a');
