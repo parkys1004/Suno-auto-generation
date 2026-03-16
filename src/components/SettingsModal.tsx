@@ -247,12 +247,15 @@ export function SettingsModal({
                       SunoAPI.org (기본)
                     </button>
                     <button 
-                      onClick={() => setBaseUrl('https://api.vessel.ai/v1')}
+                      onClick={() => setBaseUrl('https://api.vessel.ai/v1/suno')}
                       className="px-2 py-1 bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border border-[var(--border-color)] rounded text-[10px] text-[var(--text-secondary)] transition-colors"
                     >
                       Vessel.ai
                     </button>
                   </div>
+                  <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                    * API 키와 Base URL이 일치해야 합니다. (예: Vessel 키 사용 시 Vessel.ai 선택)
+                  </p>
                 </div>
 
                 <div className="flex items-center justify-between">

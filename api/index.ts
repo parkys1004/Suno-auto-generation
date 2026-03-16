@@ -40,8 +40,18 @@ app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
     if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
       apiUrl = 'https://api.sunoapi.org/api/v1';
     }
+    
+    // Remove trailing slash
     if (apiUrl.endsWith('/')) {
       apiUrl = apiUrl.slice(0, -1);
+    }
+
+    // If the user provided a full endpoint URL, strip the /generate part because we append it
+    if (apiUrl.endsWith('/generate')) {
+      apiUrl = apiUrl.slice(0, -9);
+    }
+    if (apiUrl.endsWith('/suno/generate')) {
+      apiUrl = apiUrl.slice(0, -14);
     }
     
     const payload = {
@@ -60,6 +70,7 @@ app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
     };
 
     const performRequest = async (url: string) => {
+      console.log(`Proxying request to: ${url}`);
       return await axios.post(
         url,
         payload,
@@ -75,19 +86,27 @@ app.post(/.*\/suno\/generate\/?$/, async (req, res) => {
 
     let response = await performRequest(`${apiUrl}/generate`);
     
-    if (response.status === 405) {
-      response = await performRequest(`${apiUrl}/generate/`);
+    // Fallback for some APIs that might use a different structure
+    if (response.status === 404 || response.status === 405) {
+      console.log(`Retrying with alternative path for: ${apiUrl}`);
+      // Try without /v1 if it was included, or with /suno if it's Vessel
+      if (apiUrl.includes('vessel.ai') && !apiUrl.endsWith('/suno')) {
+        response = await performRequest(`${apiUrl}/suno/generate`);
+      } else {
+        response = await performRequest(`${apiUrl}/generate/`);
+      }
     }
 
-    if (response.status >= 400) {
-      if (response.status === 401) {
+    if (response.status >= 400 || (response.data && response.data.code && response.data.code >= 400)) {
+      const status = response.status >= 400 ? response.status : response.data.code;
+      if (status === 401) {
         return res.status(401).json({
           error: 'API 인증 실패 (401 Unauthorized)',
-          message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요. (예: Vessel 사용 시 Base URL을 https://api.vessel.ai/v1 으로 설정)',
+          message: 'API 키가 올바르지 않거나, 선택한 Base URL(Endpoint)과 일치하지 않습니다. 설정에서 API 키와 Base URL을 다시 확인해주세요. (예: Vessel 사용 시 Base URL을 https://api.vessel.ai/v1/suno 로 설정)',
           details: response.data
         });
       }
-      return res.status(response.status).json(response.data);
+      return res.status(status).json(response.data);
     }
 
     res.json(response.data);

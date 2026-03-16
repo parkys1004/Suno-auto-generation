@@ -1000,8 +1000,14 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
+          const code = response.data.code;
           const msg = response.data.message || response.data.error || '';
-          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+          let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
+          
+          if (code === 401) {
+            fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
+          }
+          
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
@@ -1022,7 +1028,14 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setError('API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.');
+      } else {
+        setError(errorData?.error || errorData?.message || err.message || '음악 생성 요청에 실패했습니다.');
+      }
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1118,8 +1131,14 @@ export default function App() {
           const taskId = response.data.data.taskId;
           setTaskIds(prev => [...prev, ...taskId.split(',')]);
         } else if (response.data?.code && response.data.code !== 200) {
+          const code = response.data.code;
           const msg = response.data.message || response.data.error || '';
-          const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+          let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
+          
+          if (code === 401) {
+            fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
+          }
+          
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
           const slicedData = response.data.slice(0, 2);
@@ -1140,7 +1159,14 @@ export default function App() {
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || '음악 생성 요청에 실패했습니다.');
+      const status = err.response?.status;
+      const errorData = err.response?.data;
+      
+      if (status === 401) {
+        setError('API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.');
+      } else {
+        setError(errorData?.error || errorData?.message || err.message || '음악 생성 요청에 실패했습니다.');
+      }
       // Only stop generating if no tasks were successfully started
       setTaskIds(prev => {
         if (prev.length === 0) setIsGenerating(false);
@@ -1210,8 +1236,14 @@ export default function App() {
             newTaskIds.push(taskId);
             setTaskIds(prev => [...prev, ...taskId.split(',')]);
           } else if (response.data?.code && response.data.code !== 200) {
+            const code = response.data.code;
             const msg = response.data.message || response.data.error || '';
-            const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
+            let fullMsg = `API Error: ${code}${msg ? ` - ${msg}` : ''}`;
+            
+            if (code === 401) {
+              fullMsg = `API 인증 실패 (401): API 키가 올바르지 않거나 선택한 Base URL과 일치하지 않습니다. 설정에서 Base URL을 Vessel.ai 또는 SunoAPI.org로 변경해보세요.`;
+            }
+            
             setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
             hasError = true;
           } else if (Array.isArray(response.data) && response.data.length > 0) {
