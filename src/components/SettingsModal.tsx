@@ -103,6 +103,13 @@ export function SettingsModal({
 
             {/* Content */}
             <div className="p-6 space-y-8">
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                <p className="text-[10px] leading-relaxed text-blue-400 flex items-start gap-2">
+                  <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                  입력하신 API 키는 브라우저의 로컬 스토리지(LocalStorage)에만 저장되며, 서버로 전송되거나 외부에 노출되지 않습니다. 안심하고 사용하세요.
+                </p>
+              </div>
+
               {/* Model Selection */}
               <div className="space-y-3">
                 <label className="text-xs font-bold text-[var(--text-secondary)]">프롬프트 생성 모델 선택</label>

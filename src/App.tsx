@@ -5,6 +5,8 @@ import {
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI } from '@google/genai';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 import { Song, GeneratedPrompt, Tag } from './types';
 
@@ -130,11 +132,9 @@ export default function App() {
     { id: '2', label: '긴 인트로 (long intro)' }
   ]);
   const [additionalRequest, setAdditionalRequest] = useState('');
-  const [genCount, setGenCount] = useState(1);
+  const [genCount, setGenCount] = useState(20);
   const [lyricsLengthWithSpaces, setLyricsLengthWithSpaces] = useState(800);
   const [lyricsLengthWithoutSpaces, setLyricsLengthWithoutSpaces] = useState(400);
-  const [savePath, setSavePath] = useState(() => localStorage.getItem('save_path') || 'K:\\@수노기러기');
-  const [dirHandle, setDirHandle] = useState<any>(null);
 
   // App States
   const [isGenerating, setIsGenerating] = useState(false);
@@ -250,6 +250,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'complete' | 'favorite'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
 
   // Audio Player State
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -266,36 +267,6 @@ export default function App() {
   const [chatgptApiKey, setChatgptApiKey] = useState(() => sanitizeKey(localStorage.getItem('chatgpt_api_key')));
 
 
-
-  const handleSelectFolder = async () => {
-    // Check if running in an iframe
-    if (window.self !== window.top) {
-      const openNewTab = window.confirm(
-        '미리보기 화면(iframe)에서는 브라우저 보안 정책상 컴퓨터의 폴더를 선택할 수 없습니다.\n\n새 탭에서 앱을 열고 다시 시도하시겠습니까?'
-      );
-      if (openNewTab) {
-        window.open(window.location.href, '_blank');
-      }
-      return;
-    }
-
-    try {
-      if ('showDirectoryPicker' in window) {
-        const handle = await (window as any).showDirectoryPicker({
-          mode: 'readwrite'
-        });
-        setDirHandle(handle);
-        setSavePath(`[선택됨] ${handle.name}`);
-      } else {
-        setError('이 브라우저에서는 폴더 선택 기능을 지원하지 않습니다. 경로를 직접 입력해주세요.');
-      }
-    } catch (err: any) {
-      if (err.name !== 'AbortError') {
-        console.error('폴더 선택 에러:', err);
-        setError('폴더를 선택하는 중 오류가 발생했습니다.');
-      }
-    }
-  };
 
   const handleGenerateWav = async (song: Song, e: React.MouseEvent) => {
     e.preventDefault();
@@ -332,46 +303,136 @@ export default function App() {
     const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
 
     try {
-      if (dirHandle) {
-        // 직접 폴더에 저장
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error('Network response was not ok');
-        const blob = await response.blob();
-        
-        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        
-        setSuccess(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
-      } else {
-        throw new Error('No directory handle');
-      }
+      const response = await fetch(proxyUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
     } catch (err) {
-      // 일반 다운로드 폴백 (Blob을 이용해 파일명 강제 지정)
-      try {
-        const response = await fetch(proxyUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
-      } catch (fetchErr) {
-        // Fetch 실패 시 최후의 수단
-        const a = document.createElement('a');
-        a.href = song.audio_url;
-        a.download = fileName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      console.error('Download failed:', err);
+      setError('파일 다운로드에 실패했습니다.');
     }
+  };
+
+  const handleBatchDownload = async () => {
+    if (selectedSongs.size === 0) return;
+    
+    const songsToDownload = songs.filter(s => selectedSongs.has(s.id) && s.status === 'complete');
+    if (songsToDownload.length === 0) {
+      setError('선택된 곡 중 다운로드 가능한(완료된) 곡이 없습니다.');
+      return;
+    }
+
+    setIsRequesting(true);
+    setSuccess(`${songsToDownload.length}개의 파일 압축을 시작합니다...`);
+
+    try {
+      const zip = new JSZip();
+      const folder = zip.folder("suno_songs");
+
+      for (const song of songsToDownload) {
+        if (!song.audio_url) continue;
+        const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
+        const fileName = `${safeTitle}.mp3`;
+        const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
+        
+        try {
+          const response = await fetch(proxyUrl);
+          if (!response.ok) throw new Error(`Failed to fetch ${fileName}`);
+          const blob = await response.blob();
+          folder?.file(fileName, blob);
+        } catch (err) {
+          console.error(`Error downloading ${fileName}:`, err);
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      
+      const now = new Date();
+      const dateStr = now.getFullYear() + 
+                      String(now.getMonth() + 1).padStart(2, '0') + 
+                      String(now.getDate()).padStart(2, '0');
+      const timeStr = String(now.getHours()).padStart(2, '0') + 
+                      String(now.getMinutes()).padStart(2, '0') + 
+                      String(now.getSeconds()).padStart(2, '0');
+      const zipFileName = `suno_${dateStr}_${timeStr}.zip`;
+      
+      saveAs(content, zipFileName);
+      setSuccess('압축 파일 다운로드가 완료되었습니다.');
+      setSelectedSongs(new Set()); // Clear selection after download
+    } catch (err: any) {
+      setError('대량 다운로드 중 오류가 발생했습니다: ' + err.message);
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  const toggleSongSelection = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedSongs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const selectAllSongs = () => {
+    const filteredSongs = (songs || []).filter(s => {
+      if (!s) return false;
+      const title = s.title || '';
+      const tags = s.tags || '';
+      const matchesSearch = title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            tags.toLowerCase().includes(searchQuery.toLowerCase());
+      if (filter === 'complete') return matchesSearch && s.status === 'complete';
+      if (filter === 'favorite') return matchesSearch && s.isFavorite;
+      return matchesSearch;
+    });
+
+    const allIds = filteredSongs.map(s => s.id);
+    setSelectedSongs(prev => {
+      if (prev.size === allIds.length && allIds.every(id => prev.has(id))) {
+        return new Set();
+      }
+      return new Set(allIds);
+    });
+  };
+
+  const selectSongsByRange = (range: 'hour' | 'today' | '24h' | '7d') => {
+    const now = new Date();
+    let startTime = new Date();
+
+    if (range === 'hour') startTime.setHours(now.getHours() - 1);
+    else if (range === 'today') startTime.setHours(0, 0, 0, 0);
+    else if (range === '24h') startTime.setHours(now.getHours() - 24);
+    else if (range === '7d') startTime.setDate(now.getDate() - 7);
+
+    const filteredIds = songs
+      .filter(s => new Date(s.created_at) >= startTime)
+      .map(s => s.id);
+
+    setSelectedSongs(new Set(filteredIds));
+    setSuccess(`${filteredIds.length}개의 곡이 선택되었습니다.`);
+  };
+
+  const selectGroupSongs = (songIds: string[]) => {
+    setSelectedSongs(prev => {
+      const newSet = new Set(prev);
+      const allInGroupSelected = songIds.every(id => newSet.has(id));
+      
+      if (allInGroupSelected) {
+        songIds.forEach(id => newSet.delete(id));
+      } else {
+        songIds.forEach(id => newSet.add(id));
+      }
+      return newSet;
+    });
   };
 
   const handleDownloadWav = async (song: Song, e: React.MouseEvent) => {
@@ -383,45 +444,20 @@ export default function App() {
     const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.wav_url)}`;
 
     try {
-      if (dirHandle) {
-        // 직접 폴더에 저장
-        const response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error('Network response was not ok');
-        const blob = await response.blob();
-        
-        const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-        const writable = await fileHandle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        
-        setSuccess(`'${fileName}' 파일이 성공적으로 저장되었습니다.`);
-      } else {
-        throw new Error('No directory handle');
-      }
+      const response = await fetch(proxyUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
     } catch (err) {
-      // 일반 다운로드 폴백 (Blob을 이용해 파일명 강제 지정)
-      try {
-        const response = await fetch(proxyUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
-      } catch (fetchErr) {
-        // Fetch 실패 시 최후의 수단
-        const a = document.createElement('a');
-        a.href = song.wav_url;
-        a.download = fileName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      console.error('WAV download failed:', err);
+      setError('WAV 파일 다운로드에 실패했습니다.');
     }
   };
 
@@ -432,8 +468,7 @@ export default function App() {
     localStorage.setItem('prompt_model', promptModel);
     localStorage.setItem('gemini_api_key', geminiApiKey);
     localStorage.setItem('chatgpt_api_key', chatgptApiKey);
-    localStorage.setItem('save_path', savePath);
-  }, [apiKey, baseUrl, promptModel, geminiApiKey, chatgptApiKey, savePath]);
+  }, [apiKey, baseUrl, promptModel, geminiApiKey, chatgptApiKey]);
 
   useEffect(() => {
     try {
@@ -589,9 +624,14 @@ export default function App() {
                       const audioUrl = newSong.audioUrl || newSong.audio_url || newSong.url || newSong.play_url || newSong.cdn_url || newSong.stream_url || '';
                       if (audioUrl) console.log(`Found audio URL for ${newSong.id || currentTaskId}: ${audioUrl}`);
                       
+                      let songTitle = newSong.title || 'Untitled';
+                      if (index === 1 && !songTitle.toLowerCase().includes('v2')) {
+                        songTitle += ' v2';
+                      }
+
                       const mappedSong: Song = {
                         id: newSong.id || newSong.song_id || newSong.audio_id || (sunoData.length > 1 ? `${currentTaskId}_${index}` : currentTaskId),
-                        title: newSong.title || 'Untitled',
+                        title: songTitle,
                         image_url: newSong.imageUrl || newSong.image_url || newSong.image || newSong.metadata?.image_url || '',
                         lyric: newSong.prompt || newSong.lyric || newSong.lyrics || newSong.metadata?.prompt || '',
                         audio_url: audioUrl,
@@ -617,50 +657,6 @@ export default function App() {
                     if (newIds.length === 0 && !isRequesting) setIsGenerating(false);
                     return newIds;
                   });
-                  
-                  // Auto-download logic...
-                  if (dirHandle && sunoData.length > 0) {
-                    sunoData.forEach(async (newSong: any, index: number) => {
-                      const audioUrl = newSong.audioUrl || newSong.audio_url || newSong.url || newSong.play_url || newSong.cdn_url || newSong.stream_url;
-                      if (audioUrl) {
-                        try {
-                          // Use proxy to avoid CORS issues
-                          const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(audioUrl)}`;
-                          const response = await fetch(proxyUrl);
-                          if (!response.ok) throw new Error('Network response was not ok');
-                          const blob = await response.blob();
-                          
-                          const safeTitle = (newSong.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
-                          const songId = newSong.id || `song_${Date.now()}_${index}`;
-                          const fileName = `${safeTitle}_${songId.slice(-4)}.mp3`;
-                          
-                          const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-                          const writable = await fileHandle.createWritable();
-                          await writable.write(blob);
-                          await writable.close();
-                          
-                          console.log(`Successfully auto-saved: ${fileName}`);
-                          setSuccess(`로컬 폴더에 자동 저장됨: ${fileName}`);
-                        } catch (err) {
-                          console.error('Auto-download failed:', err);
-                          // Fallback to direct fetch if proxy fails
-                          try {
-                            const response = await fetch(audioUrl);
-                            const blob = await response.blob();
-                            const safeTitle = (newSong.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
-                            const fileName = `${safeTitle}_${Date.now().toString().slice(-4)}.mp3`;
-                            const fileHandle = await dirHandle.getFileHandle(fileName, { create: true });
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(blob);
-                            await writable.close();
-                            setSuccess(`로컬 폴더에 자동 저장됨: ${fileName}`);
-                          } catch (e) {
-                            console.error('Direct auto-download also failed:', e);
-                          }
-                        }
-                      }
-                    });
-                  }
                 }
               } else if (status === 'FAILED' || status === 'ERROR' || status.includes('FAILED') || status.includes('ERROR')) {
                 setError(prev => prev ? `${prev}\n오류: ${errorMessage || status}` : `오류: ${errorMessage || status}`);
@@ -678,7 +674,7 @@ export default function App() {
       }, 5000);
     }
     return () => { if (intervalId) clearInterval(intervalId); };
-  }, [taskIds, isGenerating, apiKey, baseUrl, isRequesting, dirHandle]);
+  }, [taskIds, isGenerating, apiKey, baseUrl, isRequesting]);
 
   // WAV Polling logic
   useEffect(() => {
@@ -829,10 +825,12 @@ export default function App() {
 - 반드시 각 단락 앞에 메타 태그(예: [Intro], [Verse 1], [Chorus], [Verse 2], [Bridge], [Outro], [Guitar Solo], [Drop] 등)를 포함하여 Suno AI가 곡의 흐름을 이해할 수 있게 하세요.
 - 곡 중간의 모든 지시문(예: [Emotional], [Whispering], [Build-up], [Fast], [Slow] 등)과 악기 연주 지시도 반드시 대괄호 []를 사용하여 작성하세요.
 - 장르의 특성(리듬, 라임, 감정선)을 살려 작사하되, **선택된 태그 정보(장르명, 악기명, 분위기 등)를 가사 텍스트 내에 직접적으로 언급하거나 포함하지 마세요.**
+- **중요: 제목과 가사는 항상 독창적이고 새로워야 합니다. 이전에 생성된 것과 유사하지 않도록 매번 다른 주제나 표현을 사용하여 절대 겹치지 않게 작성하세요. 특히 제목은 항상 고유하고 창의적이어야 합니다.**
 - 기악곡(Instrumental)인 경우 가사 대신 "[Instrumental]" 이라고만 작성하세요.
 
 [Suno AI 스타일 프롬프트 작성 가이드]
 - 선택된 기본 태그와 설명을 바탕으로 Suno AI가 가장 잘 이해할 수 있는 음악 장르, 무드, 악기, 보컬 스타일 등을 쉼표로 구분하여 영문으로 작성하세요.
+- **무조건 최고 음질로 생성되도록 다음 키워드를 프롬프트에 반드시 포함하세요: high quality, mastered, professional studio, crystal clear audio, high fidelity**
 - 특히 선택된 주요 악기(${(instruments || []).map(t => t && t.label).join(', ')}) 소리가 곡 전체에서 잘 들리고 강조되도록 프롬프트에 포함하세요. (예: prominent piano, leading electric guitar, heavy bass 등)
 - 최대 120자를 넘지 않도록 핵심 키워드 위주로 간결하게 작성하세요.
 
@@ -1162,7 +1160,12 @@ export default function App() {
           const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
-          const slicedData = response.data.slice(0, 2);
+          const slicedData = response.data.slice(0, 2).map((s: any, idx: number) => {
+            if (idx === 1 && s.title && !s.title.toLowerCase().includes('v2')) {
+              return { ...s, title: `${s.title} v2` };
+            }
+            return s;
+          });
           setSongs(prev => [...slicedData, ...prev]);
           const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
           setTaskIds(prev => [...prev, ...ids]);
@@ -1280,7 +1283,12 @@ export default function App() {
           const fullMsg = `API Error: ${response.data.code}${msg ? ` - ${msg}` : ''}`;
           setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
         } else if (Array.isArray(response.data) && response.data.length > 0) {
-          const slicedData = response.data.slice(0, 2);
+          const slicedData = response.data.slice(0, 2).map((s: any, idx: number) => {
+            if (idx === 1 && s.title && !s.title.toLowerCase().includes('v2')) {
+              return { ...s, title: `${s.title} v2` };
+            }
+            return s;
+          });
           setSongs(prev => [...slicedData, ...prev]);
           const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
           setTaskIds(prev => [...prev, ...ids]);
@@ -1380,7 +1388,12 @@ export default function App() {
             setError(prev => prev ? `${prev}\n${fullMsg}` : fullMsg);
             hasError = true;
           } else if (Array.isArray(response.data) && response.data.length > 0) {
-            const slicedData = response.data.slice(0, 2);
+            const slicedData = response.data.slice(0, 2).map((s: any, idx: number) => {
+              if (idx === 1 && s.title && !s.title.toLowerCase().includes('v2')) {
+                return { ...s, title: `${s.title} v2` };
+              }
+              return s;
+            });
             setSongs(prev => [...slicedData, ...prev]);
             const ids = slicedData.map((s: any) => String(s.id)).filter((id: string) => id.trim());
             newTaskIds.push(ids.join(','));
@@ -1502,9 +1515,6 @@ export default function App() {
           setLyricsLengthWithSpaces={setLyricsLengthWithSpaces}
           lyricsLengthWithoutSpaces={lyricsLengthWithoutSpaces}
           setLyricsLengthWithoutSpaces={setLyricsLengthWithoutSpaces}
-          savePath={savePath}
-          setSavePath={setSavePath}
-          handleSelectFolder={handleSelectFolder}
           handleGeneratePrompts={handleGeneratePrompts}
           handleGenerate={handleGenerate}
           isGeneratingPrompt={isGeneratingPrompt}
@@ -1653,6 +1663,12 @@ export default function App() {
                 handleDelete={handleDelete}
                 toggleFavorite={toggleFavorite}
                 isGeneratingWav={isGeneratingWav}
+                selectedSongs={selectedSongs}
+                toggleSongSelection={toggleSongSelection}
+                selectAllSongs={selectAllSongs}
+                selectSongsByRange={selectSongsByRange}
+                selectGroupSongs={selectGroupSongs}
+                handleBatchDownload={handleBatchDownload}
               />
             ) : (
               <PromptLibrary 

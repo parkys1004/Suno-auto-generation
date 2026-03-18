@@ -16,6 +16,12 @@ interface MusicLibraryProps {
   handleDelete: (id: string) => void;
   toggleFavorite: (id: string, e: React.MouseEvent) => void;
   isGeneratingWav: Record<string, boolean>;
+  selectedSongs: Set<string>;
+  toggleSongSelection: (id: string, e: React.MouseEvent) => void;
+  selectAllSongs: () => void;
+  selectSongsByRange: (range: 'hour' | 'today' | '24h' | '7d') => void;
+  selectGroupSongs: (songIds: string[]) => void;
+  handleBatchDownload: () => void;
 }
 
 export function MusicLibrary({
@@ -31,9 +37,16 @@ export function MusicLibrary({
   handleDownload,
   handleDelete,
   toggleFavorite,
-  isGeneratingWav
+  isGeneratingWav,
+  selectedSongs,
+  toggleSongSelection,
+  selectAllSongs,
+  selectSongsByRange,
+  selectGroupSongs,
+  handleBatchDownload
 }: MusicLibraryProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [showSelectionMenu, setShowSelectionMenu] = useState(false);
 
   const toggleGroup = (groupId: string) => {
     setCollapsedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
@@ -89,21 +102,101 @@ export function MusicLibrary({
     );
   }
 
+  const allSelected = selectedSongs.size > 0 && filteredSongs.every(s => selectedSongs.has(s.id));
+
   return (
     <div className="space-y-8">
+      {/* Bulk Actions Bar */}
+      <div className="flex items-center justify-between bg-[var(--bg-secondary)] p-3 rounded-xl border border-[var(--border-color)] sticky top-0 z-20 shadow-lg backdrop-blur-md">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <button 
+              onClick={() => setShowSelectionMenu(!showSelectionMenu)}
+              className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors bg-[var(--bg-primary)] px-3 py-1.5 rounded-lg border border-[var(--border-color)]"
+            >
+              <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${allSelected ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)]' : 'border-[var(--text-secondary)]'}`}>
+                {allSelected && <div className="w-2 h-2 bg-white rounded-sm" />}
+              </div>
+              선택 옵션
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSelectionMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showSelectionMenu && (
+              <>
+                <div 
+                  className="fixed inset-0 z-10" 
+                  onClick={() => setShowSelectionMenu(false)}
+                />
+                <div className="absolute top-full left-0 mt-2 w-48 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-20 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2">
+                  <button 
+                    onClick={() => { selectAllSongs(); setShowSelectionMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors flex items-center justify-between"
+                  >
+                    전체 선택/해제
+                  </button>
+                  <div className="h-px bg-[var(--border-color)] my-1" />
+                  <button 
+                    onClick={() => { selectSongsByRange('hour'); setShowSelectionMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
+                  >
+                    최근 1시간 이내
+                  </button>
+                  <button 
+                    onClick={() => { selectSongsByRange('today'); setShowSelectionMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
+                  >
+                    오늘 생성된 곡
+                  </button>
+                  <button 
+                    onClick={() => { selectSongsByRange('24h'); setShowSelectionMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
+                  >
+                    최근 24시간 이내
+                  </button>
+                  <button 
+                    onClick={() => { selectSongsByRange('7d'); setShowSelectionMenu(false); }}
+                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
+                  >
+                    최근 7일 이내
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          
+          {selectedSongs.size > 0 && (
+            <span className="text-xs text-[var(--text-secondary)] font-medium">
+              {selectedSongs.size}개 선택됨
+            </span>
+          )}
+        </div>
+        
+        {selectedSongs.size > 0 && (
+          <button 
+            onClick={handleBatchDownload}
+            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-[var(--accent-primary)]/20"
+          >
+            <Download className="w-3.5 h-3.5" />
+            선택 항목 다운로드 (ZIP)
+          </button>
+        )}
+      </div>
+
       {groups.map(group => {
         const groupSongs = groupedByDate[group];
         if (!groupSongs || groupSongs.length === 0) return null;
         
         const isCollapsed = collapsedGroups[group];
+        const groupIds = groupSongs.map(s => s.id);
+        const allGroupSelected = groupIds.every(id => selectedSongs.has(id));
         
         return (
           <div key={group} className="space-y-4">
-            <button 
-              onClick={() => toggleGroup(group)}
-              className="w-full flex items-center justify-between group/header"
-            >
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between group/header">
+              <button 
+                onClick={() => toggleGroup(group)}
+                className="flex items-center gap-3"
+              >
                 <div className="p-1.5 rounded-lg bg-[var(--bg-secondary)] text-[var(--text-secondary)] group-hover/header:text-[var(--accent-primary)] transition-colors">
                   <Calendar className="w-4 h-4" />
                 </div>
@@ -111,14 +204,16 @@ export function MusicLibrary({
                 <span className="text-xs text-[var(--text-secondary)] bg-[var(--bg-secondary)] px-2 py-0.5 rounded-full">
                   {groupSongs.length}
                 </span>
-              </div>
-              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
-                <span className="text-[10px] font-medium opacity-0 group-hover/header:opacity-100 transition-opacity">
-                  {isCollapsed ? '펼치기' : '접기'}
-                </span>
-                {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              </div>
-            </button>
+                {isCollapsed ? <ChevronRight className="w-4 h-4 text-[var(--text-secondary)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-secondary)]" />}
+              </button>
+
+              <button 
+                onClick={() => selectGroupSongs(groupIds)}
+                className={`text-[10px] font-bold px-2 py-1 rounded-md transition-all ${allGroupSelected ? 'bg-[var(--accent-primary)] text-white' : 'bg-[var(--bg-secondary)] text-[var(--text-secondary)] hover:text-[var(--accent-primary)] border border-[var(--border-color)]'}`}
+              >
+                {allGroupSelected ? '그룹 선택 해제' : `${group} 전체 선택`}
+              </button>
+            </div>
             
             {!isCollapsed && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -126,8 +221,16 @@ export function MusicLibrary({
                   <div 
                     key={song.id}
                     onClick={() => playSong(song)}
-                    className={`group bg-[var(--bg-secondary)] border ${currentSong?.id === song.id ? 'border-[var(--accent-primary)]/50 bg-[var(--accent-primary)]/5' : 'border-[var(--border-color)] hover:border-[var(--accent-primary)]/30'} rounded-2xl p-4 transition-all cursor-pointer hover:shadow-xl hover:shadow-black/20`}
+                    className={`group bg-[var(--bg-secondary)] border ${selectedSongs.has(song.id) ? 'border-[var(--accent-primary)] ring-1 ring-[var(--accent-primary)]/20' : currentSong?.id === song.id ? 'border-[var(--accent-primary)]/50 bg-[var(--accent-primary)]/5' : 'border-[var(--border-color)] hover:border-[var(--accent-primary)]/30'} rounded-2xl p-4 transition-all cursor-pointer hover:shadow-xl hover:shadow-black/20 relative`}
                   >
+                    {/* Selection Checkbox */}
+                    <div 
+                      onClick={(e) => toggleSongSelection(song.id, e)}
+                      className={`absolute top-3 left-3 z-10 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedSongs.has(song.id) ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)] scale-110' : 'bg-black/20 border-white/50 opacity-0 group-hover:opacity-100'}`}
+                    >
+                      {selectedSongs.has(song.id) && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+
                     <div className="flex gap-4">
                       <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-[var(--bg-primary)] shadow-lg">
                         {song.image_url ? (
