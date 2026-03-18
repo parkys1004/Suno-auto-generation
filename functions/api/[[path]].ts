@@ -1,15 +1,30 @@
 import { Hono } from 'hono';
 import { handle } from 'hono/cloudflare-pages';
+import { cors } from 'hono/cors';
 
 const app = new Hono().basePath('/api');
 
-const sanitizeKey = (key: string | null) => {
-  if (!key) return '';
+// Enable CORS
+app.use('*', cors());
+
+// Health check
+app.get('/health', (c) => c.json({ status: 'ok', environment: 'cloudflare-pages' }));
+
+const sanitizeKey = (key: any) => {
+  if (!key || typeof key !== 'string') return '';
   let sanitized = key.trim();
-  if (sanitized.toLowerCase().startsWith('bearer ')) {
-    sanitized = sanitized.slice(7).trim();
-  }
-  return sanitized;
+  return sanitized.replace(/^Bearer\s+/i, '');
+};
+
+const getApiKey = (c: any) => {
+  const authHeader = c.req.header('Authorization');
+  if (authHeader) return sanitizeKey(authHeader);
+  
+  const queryKey = c.req.query('apiKey');
+  if (queryKey) return sanitizeKey(queryKey);
+  
+  const env = c.env as any;
+  return env?.SUNO_API_KEY || env?.API_KEY || '';
 };
 
 // Suno API Proxy logic
@@ -24,7 +39,12 @@ app.post('/suno/generate', async (c) => {
       baseUrl, 
       ...payload 
     } = body;
-    const apiKey = sanitizeKey(rawApiKey);
+    
+    // Try to get API key from request, then from environment
+    let apiKey = sanitizeKey(rawApiKey);
+    if (!apiKey) {
+      apiKey = getApiKey(c);
+    }
 
     if (!apiKey) {
       return c.json({ error: 'API Key is required' }, 400);
@@ -74,8 +94,8 @@ app.post('/suno/generate', async (c) => {
 
     const data = await response.json();
     
-    // Retry logic if 401
-    if (response.status === 401) {
+    // Retry logic if 401 or 403
+    if (response.status === 401 || response.status === 403) {
       const retryResponse = await fetch(`${apiUrl}/generate`, {
         method: 'POST',
         headers: {
@@ -111,7 +131,11 @@ app.post('/suno/wav/generate', async (c) => {
   try {
     const body = await c.req.json();
     const { apiKey: rawApiKey, baseUrl, taskId, audioId, callBackUrl } = body;
-    const apiKey = sanitizeKey(rawApiKey);
+    
+    let apiKey = sanitizeKey(rawApiKey);
+    if (!apiKey) {
+      apiKey = getApiKey(c);
+    }
 
     if (!apiKey) {
       return c.json({ error: 'API Key is required' }, 400);
@@ -161,7 +185,11 @@ app.post('/suno/wav/generate', async (c) => {
 app.get('/suno/status/test', async (c) => {
   try {
     const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
-    const apiKey = sanitizeKey(rawApiKey);
+    let apiKey = sanitizeKey(rawApiKey);
+    if (!apiKey) {
+      apiKey = getApiKey(c);
+    }
+
     let apiUrl = c.req.query('baseUrl') || 'https://api.sunoapi.org/api/v1';
 
     if (!apiKey) {
@@ -193,7 +221,7 @@ app.get('/suno/status/test', async (c) => {
         return c.json({ success: true, data: await response.json() });
       }
       
-      if (response.status === 401) {
+      if (response.status === 401 || response.status === 403) {
         // Try without Bearer
         const retryResponse = await fetch(testUrl, {
           headers: { 
@@ -218,7 +246,11 @@ app.get('/suno/status/:id', async (c) => {
   try {
     const id = c.req.param('id');
     const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
-    const apiKey = sanitizeKey(rawApiKey);
+    let apiKey = sanitizeKey(rawApiKey);
+    if (!apiKey) {
+      apiKey = getApiKey(c);
+    }
+
     let apiUrl = c.req.query('baseUrl') || 'https://api.sunoapi.org/api/v1';
 
     if (!apiKey) {
@@ -295,3 +327,4 @@ app.get('/proxy/audio', async (c) => {
 });
 
 export const onRequest = handle(app);
+
