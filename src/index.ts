@@ -140,7 +140,7 @@ app.post('/api/suno/wav/generate', async (c) => {
 // Status Test
 app.get('/api/suno/status/test', async (c) => {
   try {
-    const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
+    const rawApiKey = c.req.header('Authorization') || null;
     let apiKey = sanitizeKey(rawApiKey) || getApiKey(c);
     let apiUrl = c.req.query('baseUrl') || 'https://api.sunoapi.org/api/v1';
 
@@ -161,7 +161,7 @@ app.get('/api/suno/status/test', async (c) => {
 app.get('/api/suno/status/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
+    const rawApiKey = c.req.header('Authorization') || null;
     let apiKey = sanitizeKey(rawApiKey) || getApiKey(c);
     let apiUrl = c.req.query('baseUrl') || 'https://api.sunoapi.org/api/v1';
 
@@ -192,6 +192,6 @@ app.get('/api/proxy/audio', async (c) => {
 });
 
 // Serve static files from the bucket
-app.get('*', serveStatic({ root: './' }));
+app.get('*', serveStatic({ root: './' } as any));
 
 export default app;

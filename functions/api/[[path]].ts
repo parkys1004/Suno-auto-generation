@@ -184,7 +184,7 @@ app.post('/suno/wav/generate', async (c) => {
 
 app.get('/suno/status/test', async (c) => {
   try {
-    const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
+    const rawApiKey = c.req.header('Authorization') || null;
     let apiKey = sanitizeKey(rawApiKey);
     if (!apiKey) {
       apiKey = getApiKey(c);
@@ -245,7 +245,7 @@ app.get('/suno/status/test', async (c) => {
 app.get('/suno/status/:id', async (c) => {
   try {
     const id = c.req.param('id');
-    const rawApiKey = c.req.header('Authorization')?.split(' ')[1] || null;
+    const rawApiKey = c.req.header('Authorization') || null;
     let apiKey = sanitizeKey(rawApiKey);
     if (!apiKey) {
       apiKey = getApiKey(c);

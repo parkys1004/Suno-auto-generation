@@ -39,7 +39,7 @@ export const onRequest = async (context: any) => {
     return sanitized;
   };
 
-  const apiKey = sanitizeKey(authHeader?.split(' ')[1] || null);
+  const apiKey = sanitizeKey(authHeader || null);
 
   if (!apiKey) {
     return new Response(JSON.stringify({ error: 'Authorization header is required' }), {
