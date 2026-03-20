@@ -1831,6 +1831,7 @@ export default function App() {
         apiKey={apiKey}
         setApiKey={setApiKey}
         baseUrl={baseUrl}
+        setBaseUrl={setBaseUrl}
       />
 
       <style dangerouslySetInnerHTML={{ __html: `

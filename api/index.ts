@@ -224,7 +224,7 @@ app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
               if (lastError.response?.status === 401 || lastError.response?.status === 403) {
                 throw lastError;
               }
-              if (lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
+              if (lastError.response?.status === 404 || lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
                  return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
               }
               throw lastError;
@@ -286,7 +286,7 @@ app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
                   if (retryLastError.response?.status === 401 || retryLastError.response?.status === 403) {
                     throw retryLastError;
                   }
-                  if (retryLastError.response?.data?.code === 404 || retryLastError.response?.data?.msg?.includes('not found')) {
+                  if (retryLastError.response?.status === 404 || retryLastError.response?.data?.code === 404 || retryLastError.response?.data?.msg?.includes('not found')) {
                      return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
                   }
                   throw retryLastError;

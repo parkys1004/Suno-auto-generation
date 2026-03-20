@@ -16,6 +16,7 @@ interface SettingsModalProps {
   apiKey: string;
   setApiKey: (key: string) => void;
   baseUrl: string;
+  setBaseUrl: (url: string) => void;
 }
 
 export function SettingsModal({
@@ -29,11 +30,13 @@ export function SettingsModal({
   setChatgptApiKey,
   apiKey,
   setApiKey,
-  baseUrl
+  baseUrl,
+  setBaseUrl
 }: SettingsModalProps) {
   const [geminiTestStatus, setGeminiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [chatgptTestStatus, setChatgptTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [sunoTestStatus, setSunoTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [sunoError, setSunoError] = useState<string>('');
 
   const testGeminiKey = async () => {
     if (!geminiApiKey) return;
@@ -66,6 +69,7 @@ export function SettingsModal({
   const testSunoKey = async () => {
     if (!apiKey) return;
     setSunoTestStatus('testing');
+    setSunoError('');
     try {
       const response = await axios.get(`/api/suno/status/test?baseUrl=${encodeURIComponent(baseUrl)}`, {
         headers: { Authorization: `Bearer ${apiKey}` }
@@ -74,9 +78,11 @@ export function SettingsModal({
         setSunoTestStatus('success');
       } else {
         setSunoTestStatus('error');
+        setSunoError(response.data?.error || 'API 키가 올바르지 않거나 서버 응답이 없습니다.');
       }
     } catch (e: any) {
       setSunoTestStatus('error');
+      setSunoError(e.response?.data?.error || e.message || '테스트 중 오류가 발생했습니다.');
     }
   };
 
@@ -201,6 +207,7 @@ export function SettingsModal({
                       }
                       setApiKey(val);
                       setSunoTestStatus('idle');
+                      setSunoError('');
                     }}
                     placeholder="••••••••••••••••••••••••••••••••••••"
                     className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl pl-4 pr-20 py-3 text-sm text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-colors placeholder:text-[var(--text-secondary)] opacity-70"
@@ -213,21 +220,46 @@ export function SettingsModal({
                     {sunoTestStatus === 'testing' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : '테스트'}
                   </button>
                 </div>
-                <div className="flex items-center justify-between">
-                  <a 
-                    href="https://sunoapi.org/ko/api-key" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    API 키 발급받기
-                  </a>
-                  {sunoTestStatus === 'success' && (
-                    <span className="text-xs font-medium text-[var(--accent-text)] flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> 사용 가능</span>
-                  )}
-                  {sunoTestStatus === 'error' && (
-                    <span className="text-xs font-medium text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> 사용 불가</span>
+
+                {/* Suno Base URL */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Base URL (선택 사항)</label>
+                  <input
+                    type="text"
+                    value={baseUrl}
+                    onChange={(e) => {
+                      setBaseUrl(e.target.value.trim());
+                      setSunoTestStatus('idle');
+                      setSunoError('');
+                    }}
+                    placeholder="https://api.sunoapi.org/api/v1"
+                    className="w-full bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] outline-none focus:border-[var(--accent-primary)] transition-colors placeholder:text-[var(--text-secondary)] opacity-70"
+                  />
+                  <p className="text-[9px] text-[var(--text-secondary)]">기본값: https://api.sunoapi.org/api/v1 (Cloudflare 프록시 사용 시 변경)</p>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <a 
+                      href="https://sunoapi.org/ko/api-key" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="inline-flex items-center gap-1.5 text-xs text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      API 키 발급받기
+                    </a>
+                    {sunoTestStatus === 'success' && (
+                      <span className="text-xs font-medium text-[var(--accent-text)] flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> 사용 가능</span>
+                    )}
+                    {sunoTestStatus === 'error' && (
+                      <span className="text-xs font-medium text-red-400 flex items-center gap-1"><AlertCircle className="w-3.5 h-3.5" /> 사용 불가</span>
+                    )}
+                  </div>
+                  {sunoError && (
+                    <p className="text-[10px] text-red-400/80 bg-red-400/5 p-2 rounded-lg border border-red-400/10 mt-1">
+                      {sunoError}
+                    </p>
                   )}
                 </div>
               </div>

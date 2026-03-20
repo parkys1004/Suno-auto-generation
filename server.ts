@@ -268,8 +268,8 @@ async function startServer() {
                 if (lastError.response?.status === 401 || lastError.response?.status === 403) {
                   throw lastError;
                 }
-                // If it's a 404 for the record but not the endpoint, it might be okay
-                if (lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
+                // If it's a 404, it might be that the test endpoint is missing but the API is there
+                if (lastError.response?.status === 404 || lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
                    return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
                 }
                 throw lastError;
@@ -333,7 +333,7 @@ async function startServer() {
                     if (retryLastError.response?.status === 401 || retryLastError.response?.status === 403) {
                       throw retryLastError;
                     }
-                    if (retryLastError.response?.data?.code === 404 || retryLastError.response?.data?.msg?.includes('not found')) {
+                    if (retryLastError.response?.status === 404 || retryLastError.response?.data?.code === 404 || retryLastError.response?.data?.msg?.includes('not found')) {
                        return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
                     }
                     throw retryLastError;
