@@ -109,12 +109,9 @@ async function startServer() {
     } catch (error: any) {
       const status = error.response?.status || 500;
       const data = error.response?.data;
-      console.error(`Suno API Error (${status}):`, data ? JSON.stringify(data) : error.message);
+      console.error(`Suno API Error (${status}):`, JSON.stringify(data) || error.message);
       
-      // Log more details for 500 errors to help debugging
-      if (status === 500) {
-        console.error('Full Error Object:', error);
-      }
+      // If it's a 401, maybe the provider doesn't want the "Bearer " prefix?
       // Some providers just want the key in the Authorization header.
       if (status === 401 && !req.query.retry) {
         console.log('Retrying without Bearer prefix...');
@@ -206,7 +203,7 @@ async function startServer() {
 
   app.get('/api/suno/status/test', async (req, res) => {
     try {
-      const apiKey = sanitizeKey(req.headers.authorization || null);
+      const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
       let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
 
       if (!apiKey) {
@@ -295,7 +292,7 @@ async function startServer() {
       // If 401, try without Bearer
       if (status === 401) {
         try {
-          const apiKey = sanitizeKey(req.headers.authorization || null);
+          const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
           let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
           let retryUrl = `${apiUrl}/limit`;
           let retryResponse;
@@ -367,7 +364,7 @@ async function startServer() {
   app.get('/api/suno/status/:id', async (req, res) => {
     try {
       const { id } = req.params;
-      const apiKey = sanitizeKey(req.headers.authorization || null);
+      const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
       let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
 
       if (!apiKey) {

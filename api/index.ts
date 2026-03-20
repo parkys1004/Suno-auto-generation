@@ -166,7 +166,7 @@ app.post(['/api/suno/wav/generate', '/suno/wav/generate'], async (req, res) => {
 
 app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
   try {
-    const apiKey = sanitizeKey(req.headers.authorization || null);
+    const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
     let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
 
     if (!apiKey) {
@@ -245,7 +245,7 @@ app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
     
     if (status === 401) {
       try {
-        const apiKey = sanitizeKey(req.headers.authorization || null);
+        const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
         let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
         let retryUrl = `${apiUrl}/limit`;
         let retryResponse;
@@ -318,7 +318,7 @@ app.get(['/api/suno/status/:id', '/suno/status/:id'], async (req, res) => {
   try {
     const { id } = req.params;
     const authHeader = req.headers.authorization;
-    const apiKey = sanitizeKey(authHeader || null);
+    const apiKey = sanitizeKey(authHeader?.split(' ')[1] || null);
     let apiUrl = (req.query.baseUrl as string) || 'https://api.sunoapi.org/api/v1';
     
     if (!apiKey) {
