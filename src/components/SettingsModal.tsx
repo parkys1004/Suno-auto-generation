@@ -78,11 +78,12 @@ export function SettingsModal({
         setSunoTestStatus('success');
       } else {
         setSunoTestStatus('error');
-        setSunoError(response.data?.error || 'API 키가 올바르지 않거나 서버 응답이 없습니다.');
+        setSunoError(response.data?.error || response.data?.message || 'API 키가 올바르지 않거나 서버 응답이 없습니다. Cloudflare 프록시 사용 시 Base URL을 확인해주세요.');
       }
     } catch (e: any) {
       setSunoTestStatus('error');
-      setSunoError(e.response?.data?.error || e.message || '테스트 중 오류가 발생했습니다.');
+      const errorMsg = e.response?.data?.error || e.response?.data?.message || e.message || '테스트 중 오류가 발생했습니다.';
+      setSunoError(errorMsg + ' (Base URL이 올바른지 확인해주세요)');
     }
   };
 

@@ -1712,7 +1712,6 @@ export default function App() {
         onTimeUpdate={handleTimeUpdate}
         onEnded={() => setIsPlaying(false)}
         onLoadedMetadata={handleTimeUpdate}
-        referrerPolicy="no-referrer"
         onError={(e) => {
           if (currentSong?.audio_url && e.currentTarget.src.includes('/api/proxy/audio')) {
             e.currentTarget.src = currentSong.audio_url;

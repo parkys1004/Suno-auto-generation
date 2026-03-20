@@ -13,7 +13,8 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
+  app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
   // Request logger
   app.use((req, res, next) => {
@@ -232,11 +233,13 @@ async function startServer() {
             'Accept': 'application/json',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           },
-          timeout: 10000
+          timeout: 15000
         });
       } catch (error: any) {
+        console.warn(`Initial test at ${testUrl} failed: ${error.message}`);
+        
         // If /limit is not found, try /feed as a fallback
-        if (error.response?.status === 404) {
+        if (error.response?.status === 404 || error.response?.status === 405) {
           console.log('/limit not found, trying /feed...');
           testUrl = `${apiUrl}/feed`;
           try {
@@ -246,11 +249,13 @@ async function startServer() {
                 'Accept': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
               },
-              timeout: 10000
+              timeout: 15000
             });
           } catch (feedError: any) {
+            console.warn(`Fallback test at ${testUrl} failed: ${feedError.message}`);
+            
             // If /feed is also not found, try a generic status check as last resort
-            if (feedError.response?.status === 404) {
+            if (feedError.response?.status === 404 || feedError.response?.status === 405) {
               console.log('/feed not found, trying /generate/record-info...');
               testUrl = `${apiUrl}/generate/record-info?taskId=test`;
               try {
@@ -260,18 +265,26 @@ async function startServer() {
                     'Accept': 'application/json',
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                   },
-                  timeout: 10000
+                  timeout: 15000
                 });
               } catch (lastError: any) {
+                console.warn(`Last resort test at ${testUrl} failed: ${lastError.message}`);
+                
                 // If we get a 401/403, it means the key is invalid
-                // If we get a 400 or 404 (but with a valid API response structure), the key might be valid
                 if (lastError.response?.status === 401 || lastError.response?.status === 403) {
                   throw lastError;
                 }
+                
                 // If it's a 404, it might be that the test endpoint is missing but the API is there
                 if (lastError.response?.status === 404 || lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
                    return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
                 }
+                
+                // If we get a 400 with a specific message, it might be valid
+                if (lastError.response?.status === 400 && lastError.response?.data?.msg?.includes('taskId')) {
+                   return res.json({ success: true, message: 'API reached and key accepted. Ready to generate.' });
+                }
+                
                 throw lastError;
               }
             } else {
@@ -509,6 +522,15 @@ async function startServer() {
       console.warn(`404 - API Route not found: ${req.method} ${req.url}`);
       res.status(404).json({ error: 'API Route not found' });
     }
+  });
+
+  // Global error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Global Error Handler:', err);
+    res.status(err.status || 500).json({
+      error: err.message || 'Internal Server Error',
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   });
 
   app.listen(PORT, '0.0.0.0', () => {
