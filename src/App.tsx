@@ -16,9 +16,11 @@ import { NowPlaying } from './components/NowPlaying';
 import { MusicLibrary } from './components/MusicLibrary';
 import { PromptLibrary } from './components/PromptLibrary';
 import { GenerationForm } from './components/GenerationForm';
+import { ManualModal } from './components/ManualModal';
 
 export default function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [isManualOpen, setIsManualOpen] = useState(false);
   const libraryScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1460,6 +1462,7 @@ export default function App() {
       {/* Header */}
       <Header 
         onOpenSettings={() => setIsApiModalOpen(true)} 
+        onOpenManual={() => setIsManualOpen(true)}
         theme={theme}
         toggleTheme={toggleTheme}
         onDownloadSettings={handleDownloadSettings}
@@ -1831,6 +1834,11 @@ export default function App() {
         setApiKey={setApiKey}
         baseUrl={baseUrl}
         setBaseUrl={setBaseUrl}
+      />
+
+      <ManualModal 
+        isOpen={isManualOpen}
+        onClose={() => setIsManualOpen(false)}
       />
 
       <style dangerouslySetInnerHTML={{ __html: `

@@ -1043,6 +1043,19 @@ export function GenerationForm({
             {isGenerating ? '음악 생성 중...' : '음악 생성'}
           </button>
         </div>
+        <a 
+          href="https://kmong.com/self-marketing/730531/ZQh4nXZpK5" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="w-full bg-[#FFD400] hover:bg-[#F2C900] text-[#333333] rounded-xl py-4 flex items-center justify-center gap-2 text-sm font-bold transition-all active:scale-[0.98] mt-2"
+        >
+          크몽 바로가기
+        </a>
+        <div className="text-center mt-4">
+          <p className="text-[10px] text-[var(--text-secondary)]">
+            © 2026 방구석 작곡가(5barTV). All rights reserved.
+          </p>
+        </div>
       </div>
     </div>
   );
