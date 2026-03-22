@@ -191,7 +191,13 @@ app.get('/api/proxy/audio', async (c) => {
   }
 });
 
+// @ts-ignore
+import manifest from '__STATIC_CONTENT_MANIFEST';
+
 // Serve static files from the bucket
-app.get('*', serveStatic({ root: './' } as any));
+app.get('/*', serveStatic({ root: './', manifest }));
+
+// Fallback to index.html for SPA routing
+app.get('*', serveStatic({ path: './index.html', manifest }));
 
 export default app;
