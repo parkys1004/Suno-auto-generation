@@ -134,7 +134,7 @@ export default function App() {
     { id: '2', label: '긴 인트로 (long intro)' }
   ]);
   const [additionalRequest, setAdditionalRequest] = useState('');
-  const [genCount, setGenCount] = useState(20);
+  const [genCount, setGenCount] = useState(1);
   const [lyricsLengthWithSpaces, setLyricsLengthWithSpaces] = useState(800);
   const [lyricsLengthWithoutSpaces, setLyricsLengthWithoutSpaces] = useState(400);
 
