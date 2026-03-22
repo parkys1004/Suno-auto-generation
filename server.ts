@@ -16,9 +16,11 @@ async function startServer() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  // Request logger
+  // Request logger (API only)
   app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    if (req.url.startsWith('/api')) {
+      console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+    }
     next();
   });
 
