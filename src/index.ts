@@ -151,12 +151,47 @@ app.get('/api/suno/status/test', async (c) => {
 
     if (!apiKey) return c.json({ error: 'API Key is required' }, 400);
 
-    const response = await fetch(`${apiUrl}/limit`, {
-      headers: { 'Authorization': `Bearer ${apiKey}` }
-    });
+    if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
+      apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
+    }
+    if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
+      apiUrl = 'https://api.sunoapi.org/api/v1';
+    }
+    if (apiUrl.endsWith('/')) {
+      apiUrl = apiUrl.slice(0, -1);
+    }
 
-    if (response.ok) return c.json({ success: true, data: await response.json() });
-    return c.json({ success: false }, 401);
+    const testUrls = [`${apiUrl}/limit`, `${apiUrl}/feed`, `${apiUrl}/generate/record-info?taskId=test`];
+    
+    for (const testUrl of testUrls) {
+      const response = await fetch(testUrl, {
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0'
+        }
+      });
+
+      if (response.ok) {
+        return c.json({ success: true, data: await response.json() });
+      }
+      
+      if (response.status === 401 || response.status === 403) {
+        // Try without Bearer
+        const retryResponse = await fetch(testUrl, {
+          headers: { 
+            'Authorization': apiKey,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0'
+          }
+        });
+        if (retryResponse.ok) {
+          return c.json({ success: true, data: await retryResponse.json() });
+        }
+      }
+    }
+
+    return c.json({ success: false, error: 'Failed to reach API or invalid key' }, 401);
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
