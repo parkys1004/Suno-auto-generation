@@ -206,7 +206,7 @@ app.get('/assets/*', async (c, next) => {
     return env.ASSETS.fetch(c.req.raw);
   }
   const serve = serveStatic({ root: './', manifest });
-  return await serve(c, next);
+  return serve(c, next);
 });
 
 app.get('/*', async (c, next) => {
@@ -216,19 +216,11 @@ app.get('/*', async (c, next) => {
     if (response.status < 400) {
       return response;
     }
-    // If not found in ASSETS, fall through to SPA routing
-  } else {
-    try {
-      const serve = serveStatic({ root: './', manifest });
-      const response = await serve(c, next);
-      if (response && response.status < 400) {
-        return response;
-      }
-    } catch (err) {
-      console.error('serveStatic error:', err);
-    }
+    return next();
   }
-  await next();
+  
+  const serve = serveStatic({ root: './', manifest });
+  return serve(c, next);
 });
 
 // Fallback to index.html for SPA routing
@@ -239,13 +231,9 @@ app.get('*', async (c, next) => {
     url.pathname = '/index.html';
     return env.ASSETS.fetch(new Request(url.toString(), c.req.raw));
   }
-  try {
-    const serve = serveStatic({ path: 'index.html', manifest });
-    return await serve(c, next);
-  } catch (err) {
-    console.error('Fallback error:', err);
-    return c.text('Internal Server Error', 500);
-  }
+  
+  const serve = serveStatic({ path: 'index.html', manifest });
+  return serve(c, next);
 });
 
 export default app;
