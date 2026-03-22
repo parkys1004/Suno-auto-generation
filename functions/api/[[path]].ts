@@ -4,6 +4,11 @@ import { cors } from 'hono/cors';
 
 const app = new Hono().basePath('/api');
 
+app.onError((err, c) => {
+  console.error('Hono Pages Error:', err);
+  return c.text(`Internal Server Error: ${err.message}`, 500);
+});
+
 // Enable CORS
 app.use('*', cors());
 

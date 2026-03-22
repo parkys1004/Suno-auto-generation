@@ -4,6 +4,11 @@ import { serveStatic } from 'hono/cloudflare-workers';
 
 const app = new Hono();
 
+app.onError((err, c) => {
+  console.error('Hono Error:', err);
+  return c.text(`Internal Server Error: ${err.message}`, 500);
+});
+
 // Enable CORS
 app.use('/api/*', cors());
 
@@ -195,9 +200,52 @@ app.get('/api/proxy/audio', async (c) => {
 import manifest from '__STATIC_CONTENT_MANIFEST';
 
 // Serve static files from the bucket
-app.get('/*', serveStatic({ root: './', manifest }));
+app.get('/assets/*', async (c, next) => {
+  const env = c.env as any;
+  if (env && env.ASSETS) {
+    return env.ASSETS.fetch(c.req.raw);
+  }
+  const serve = serveStatic({ root: './', manifest });
+  return await serve(c, next);
+});
+
+app.get('/*', async (c, next) => {
+  const env = c.env as any;
+  if (env && env.ASSETS) {
+    const response = await env.ASSETS.fetch(c.req.raw);
+    if (response.status < 400) {
+      return response;
+    }
+    // If not found in ASSETS, fall through to SPA routing
+  } else {
+    try {
+      const serve = serveStatic({ root: './', manifest });
+      const response = await serve(c, next);
+      if (response && response.status < 400) {
+        return response;
+      }
+    } catch (err) {
+      console.error('serveStatic error:', err);
+    }
+  }
+  await next();
+});
 
 // Fallback to index.html for SPA routing
-app.get('*', serveStatic({ path: './index.html', manifest }));
+app.get('*', async (c, next) => {
+  const env = c.env as any;
+  if (env && env.ASSETS) {
+    const url = new URL(c.req.url);
+    url.pathname = '/index.html';
+    return env.ASSETS.fetch(new Request(url.toString(), c.req.raw));
+  }
+  try {
+    const serve = serveStatic({ path: 'index.html', manifest });
+    return await serve(c, next);
+  } catch (err) {
+    console.error('Fallback error:', err);
+    return c.text('Internal Server Error', 500);
+  }
+});
 
 export default app;
