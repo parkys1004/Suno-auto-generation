@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -743,11 +743,11 @@ export default function App() {
           return JSON.parse(match[1]);
         } catch (e2) {
           // If still fails, try to find the first { and last }
-          const firstBrace = text.indexOf('{');
-          const lastBrace = text.lastIndexOf('}');
+          const firstBrace = match[1].indexOf('{');
+          const lastBrace = match[1].lastIndexOf('}');
           if (firstBrace !== -1 && lastBrace !== -1) {
             try {
-              return JSON.parse(text.substring(firstBrace, lastBrace + 1));
+              return JSON.parse(match[1].substring(firstBrace, lastBrace + 1));
             } catch (e3) {
               throw new Error('JSON parsing failed even after extraction attempts');
             }
@@ -854,6 +854,15 @@ export default function App() {
           contents: systemPrompt,
           config: {
             responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                lyrics: { type: Type.STRING },
+                style_prompt: { type: Type.STRING }
+              },
+              required: ["title", "lyrics", "style_prompt"]
+            }
           }
         });
         
@@ -971,6 +980,22 @@ export default function App() {
           contents: systemPrompt,
           config: {
             responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                genres: { type: Type.ARRAY, items: { type: Type.STRING } },
+                subGenres: { type: Type.ARRAY, items: { type: Type.STRING } },
+                moods: { type: Type.ARRAY, items: { type: Type.STRING } },
+                instruments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                vocalGenders: { type: Type.ARRAY, items: { type: Type.STRING } },
+                vocalTypes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                musicType: { type: Type.STRING },
+                tempo: { type: Type.NUMBER },
+                mainLanguage: { type: Type.STRING },
+                lyricsLengthWithSpaces: { type: Type.NUMBER },
+                lyricsLengthWithoutSpaces: { type: Type.NUMBER }
+              }
+            }
           }
         });
         
