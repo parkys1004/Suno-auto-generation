@@ -437,13 +437,10 @@ export default function App() {
     });
   };
 
-  const handleDownloadWav = async (song: Song, e: React.MouseEvent) => {
-    e.preventDefault();
-    if (!song.wav_url) return;
-    
-    const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
+  const downloadWavFile = async (wavUrl: string, title: string) => {
+    const safeTitle = (title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.wav`;
-    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.wav_url)}`;
+    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(wavUrl)}`;
 
     try {
       const response = await fetch(proxyUrl);
@@ -461,6 +458,12 @@ export default function App() {
       console.error('WAV download failed:', err);
       setError('WAV 파일 다운로드에 실패했습니다.');
     }
+  };
+
+  const handleDownloadWav = async (song: Song, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    if (!song.wav_url) return;
+    await downloadWavFile(song.wav_url, song.title);
   };
 
   // Save settings
@@ -711,6 +714,10 @@ export default function App() {
                     return newTasks;
                   });
                   setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
+                  
+                  // 자동으로 다운로드 실행
+                  const title = songData.title || 'Untitled';
+                  downloadWavFile(wavUrl, title);
                 } else if (data.status === 'FAILED' || data.status === 'CREATE_TASK_FAILED' || data.status === 'GENERATE_AUDIO_FAILED') {
                   setWavPollingTasks(prev => {
                     const newTasks = { ...prev };
