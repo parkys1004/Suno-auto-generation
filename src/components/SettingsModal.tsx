@@ -17,6 +17,8 @@ interface SettingsModalProps {
   setApiKey: (key: string) => void;
   baseUrl: string;
   setBaseUrl: (url: string) => void;
+  generatedHistoryCount: number;
+  onClearHistory: () => void;
 }
 
 export function SettingsModal({
@@ -31,7 +33,9 @@ export function SettingsModal({
   apiKey,
   setApiKey,
   baseUrl,
-  setBaseUrl
+  setBaseUrl,
+  generatedHistoryCount,
+  onClearHistory
 }: SettingsModalProps) {
   const [geminiTestStatus, setGeminiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [chatgptTestStatus, setChatgptTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -263,6 +267,31 @@ export function SettingsModal({
                     </p>
                   )}
                 </div>
+              </div>
+
+              {/* Generation History Management */}
+              <div className="pt-4 border-t border-[var(--border-color)] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-sm font-bold text-[var(--text-primary)]">생성 기록 관리</label>
+                    <p className="text-[10px] text-[var(--text-secondary)]">중복 생성을 방지하기 위해 저장된 기록입니다.</p>
+                  </div>
+                  <span className="px-2 py-1 bg-[var(--bg-secondary)] text-[var(--text-secondary)] text-[10px] font-bold rounded-md border border-[var(--border-color)]">
+                    {generatedHistoryCount}개 저장됨
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    if (window.confirm('모든 생성 기록을 삭제하시겠습니까? 중복 방지 기능이 초기화됩니다.')) {
+                      onClearHistory();
+                    }
+                  }}
+                  disabled={generatedHistoryCount === 0}
+                  className="w-full py-2.5 px-4 bg-red-400/10 hover:bg-red-400/20 text-red-400 text-xs font-bold rounded-xl border border-red-400/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  생성 기록 모두 삭제
+                </button>
               </div>
             </div>
 

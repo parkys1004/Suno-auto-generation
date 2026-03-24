@@ -240,6 +240,19 @@ export default function App() {
       return [];
     }
   });
+  const [generatedHistory, setGeneratedHistory] = useState<{title: string, lyrics: string}[]>(() => {
+    try {
+      const saved = localStorage.getItem('generated_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('generated_history', JSON.stringify(generatedHistory.slice(-100))); // Keep last 100
+  }, [generatedHistory]);
+
   const [libraryTab, setLibraryTab] = useState<'music' | 'prompts'>('music');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [isAutoSetting, setIsAutoSetting] = useState(false);
@@ -285,8 +298,34 @@ export default function App() {
       });
       
       if (response.data) {
-        setSuccess('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
-        setWavPollingTasks(prev => ({ ...prev, [song.id]: song.taskId || song.id }));
+        console.log('WAV Generate Response:', response.data);
+        
+        let newTaskId = response.data?.data?.taskId || response.data?.taskId || response.data?.task_id;
+        if (!newTaskId && Array.isArray(response.data) && response.data.length > 0) {
+          newTaskId = response.data[0].taskId || response.data[0].task_id || response.data[0].id;
+        }
+
+        const directWavUrl = response.data?.data?.wavUrl || response.data?.wavUrl || response.data?.audioUrl;
+
+        if (newTaskId && newTaskId !== song.taskId && newTaskId !== song.id) {
+          setSuccess('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
+          setWavPollingTasks(prev => ({ ...prev, [song.id]: newTaskId }));
+        } else if (directWavUrl && directWavUrl.endsWith('.wav')) {
+          setSuccess('WAV 변환이 완료되었습니다.');
+          setSongs(prev => prev.map(s => s.id === song.id ? { ...s, wav_url: directWavUrl } : s));
+          setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
+          downloadWavFile(directWavUrl, song.title);
+        } else {
+          // 새로운 taskId가 없는 경우, 이미 변환되었거나 API 응답 형식이 다를 수 있습니다.
+          // 이 경우 기존 audioUrl이 wav인지 확인하거나 에러 처리합니다.
+          if (song.audio_url?.endsWith('.wav') || song.wav_url) {
+            setSuccess('이미 WAV 형식이거나 변환이 완료되었습니다.');
+            downloadWavFile(song.wav_url || song.audio_url!, song.title);
+          } else {
+            setError('WAV 변환 작업 ID를 받지 못했습니다. 잠시 후 다시 시도해주세요.');
+          }
+          setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
+        }
       } else {
         setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
       }
@@ -702,12 +741,20 @@ export default function App() {
             
             if (data) {
               const sunoData = data.response?.sunoData || [];
-              const songData = sunoData.find((s: any) => s.id === songId);
+              
+              // WAV 변환의 경우 새로운 ID로 생성될 수 있으므로, 
+              // 원래 songId와 일치하는 것을 찾거나, 배열의 첫 번째 항목을 사용합니다.
+              const songData = sunoData.find((s: any) => s.id === songId) || sunoData[0];
               
               if (songData) {
                 const wavUrl = songData.wavUrl || (songData.audioUrl?.endsWith('.wav') ? songData.audioUrl : null);
-                if (wavUrl) {
-                  setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: wavUrl } : s));
+                
+                // 만약 status가 SUCCESS인데 wavUrl이 없다면, audioUrl을 wavUrl로 간주할 수도 있습니다.
+                // 하지만 확실한 처리를 위해 wavUrl이 있거나 status가 SUCCESS인 경우를 체크합니다.
+                if (wavUrl || (data.status === 'SUCCESS' && songData.audioUrl)) {
+                  const finalWavUrl = wavUrl || songData.audioUrl;
+                  
+                  setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: finalWavUrl } : s));
                   setWavPollingTasks(prev => {
                     const newTasks = { ...prev };
                     delete newTasks[songId];
@@ -717,15 +764,15 @@ export default function App() {
                   
                   // 자동으로 다운로드 실행
                   const title = songData.title || 'Untitled';
-                  downloadWavFile(wavUrl, title);
-                } else if (data.status === 'FAILED' || data.status === 'CREATE_TASK_FAILED' || data.status === 'GENERATE_AUDIO_FAILED') {
+                  downloadWavFile(finalWavUrl, title);
+                } else if (data.status === 'FAILED' || data.status === 'CREATE_TASK_FAILED' || data.status === 'GENERATE_AUDIO_FAILED' || (data.status === 'SUCCESS' && !wavUrl && !songData.audioUrl)) {
                   setWavPollingTasks(prev => {
                     const newTasks = { ...prev };
                     delete newTasks[songId];
                     return newTasks;
                   });
                   setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
-                  alert(`WAV 변환 실패: ${data.errorMessage || '알 수 없는 오류'}`);
+                  alert(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
                 }
               }
             }
@@ -793,7 +840,7 @@ export default function App() {
     setSuccess('상태를 다시 확인하는 중입니다...');
   };
 
-  const handleGeneratePrompt = async (shouldSwitchTab: boolean = true): Promise<GeneratedPrompt | null> => {
+  const handleGeneratePrompt = async (shouldSwitchTab: boolean = true, currentBatchHistory: {title: string, lyrics: string}[] = []): Promise<GeneratedPrompt | null> => {
     if (promptModel === 'gemini' && !geminiApiKey) {
       setError('Gemini API 키를 설정에서 입력해주세요.');
       return null;
@@ -822,6 +869,10 @@ export default function App() {
 
       const lengthDescription = `공백 포함 약 ${lyricsLengthWithSpaces}자, 공백 제외 약 ${lyricsLengthWithoutSpaces}자 내외의 분량 (지정된 장르에 최적화된 구조 적용)`;
 
+      // Combine global history and current batch history
+      const fullHistory = [...generatedHistory, ...currentBatchHistory].slice(-30); // Last 30 items for context
+      const historyTitles = fullHistory.map(h => h.title).join(', ');
+
       const systemPrompt = `당신은 전문적인 음악 작사가이자 프로듀서입니다. 다음 설정을 바탕으로 음악의 제목, 가사, 그리고 Suno AI에 입력할 최적화된 '스타일 프롬프트(Style Prompt)'를 작성해주세요.
 
 설명: ${description}
@@ -835,6 +886,8 @@ export default function App() {
 - 곡 중간의 모든 지시문(예: [Emotional], [Whispering], [Build-up], [Fast], [Slow] 등)과 악기 연주 지시도 반드시 대괄호 []를 사용하여 작성하세요.
 - 장르의 특성(리듬, 라임, 감정선)을 살려 작사하되, **선택된 태그 정보(장르명, 악기명, 분위기 등)를 가사 텍스트 내에 직접적으로 언급하거나 포함하지 마세요.**
 - **중요: 제목과 가사는 항상 독창적이고 새로워야 합니다. 이전에 생성된 것과 유사하지 않도록 매번 다른 주제나 표현을 사용하여 절대 겹치지 않게 작성하세요. 특히 제목은 항상 고유하고 창의적이어야 합니다.**
+- **랜덤성 및 다양성: 동일한 설정이라도 매번 완전히 다른 관점, 감정, 상황을 설정하여 창의적이고 랜덤하게 생성하세요.**
+- **제외할 제목 목록 (이미 생성됨): ${historyTitles || '없음'}**
 - 기악곡(Instrumental)인 경우 가사 대신 "[Instrumental]" 이라고만 작성하세요.
 
 [Suno AI 스타일 프롬프트 작성 가이드]
@@ -924,6 +977,7 @@ export default function App() {
       };
 
       setPrompts(prev => [newPrompt, ...prev]);
+      setGeneratedHistory(prev => [...prev, { title, lyrics }].slice(-100));
       if (shouldSwitchTab) setLibraryTab('prompts');
       return newPrompt;
     } catch (err: any) {
@@ -1242,8 +1296,12 @@ export default function App() {
     setLibraryTab('prompts');
     
     try {
+      const currentBatchHistory: {title: string, lyrics: string}[] = [];
       for (let i = 0; i < genCount; i++) {
-        await handleGeneratePrompt(i === 0); // Only switch tab on the first one
+        const promptToUse = await handleGeneratePrompt(i === 0, currentBatchHistory); // Only switch tab on the first one
+        if (promptToUse) {
+          currentBatchHistory.push({ title: promptToUse.title, lyrics: promptToUse.lyrics });
+        }
         if (genCount > 1 && i < genCount - 1) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -1275,12 +1333,16 @@ export default function App() {
         gender = 'm';
       }
 
+      const currentBatchHistory: {title: string, lyrics: string}[] = [];
+
       for (let i = 0; i < genCount; i++) {
         setGenerationProgress(prev => ({ ...prev, current: i + 1 }));
         
         // Generate a new unique prompt for each iteration
-        const promptToUse = await handleGeneratePrompt(false);
+        const promptToUse = await handleGeneratePrompt(false, currentBatchHistory);
         if (!promptToUse) continue;
+        
+        currentBatchHistory.push({ title: promptToUse.title, lyrics: promptToUse.lyrics });
         
         // Add request number to the title for clarity
         const requestTitle = promptToUse.title;
@@ -1866,6 +1928,8 @@ export default function App() {
         setApiKey={setApiKey}
         baseUrl={baseUrl}
         setBaseUrl={setBaseUrl}
+        generatedHistoryCount={generatedHistory.length}
+        onClearHistory={() => setGeneratedHistory([])}
       />
 
       <ManualModal 
