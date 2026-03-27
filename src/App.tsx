@@ -964,25 +964,29 @@ export default function App() {
       let lyrics = '';
       let style_prompt = '';
 
+      const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')), ms));
+
       if (promptModel === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const result = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: systemPrompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                lyrics: { type: Type.STRING },
-                style_prompt: { type: Type.STRING }
-              },
-              required: ["title", "lyrics", "style_prompt"]
+        const result = await Promise.race([
+          ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: systemPrompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  lyrics: { type: Type.STRING },
+                  style_prompt: { type: Type.STRING }
+                },
+                required: ["title", "lyrics", "style_prompt"]
+              }
             }
-          }
-        });
+          }),
+          timeout(120000)
+        ]) as any;
         
         let responseText = '';
         try {
@@ -999,30 +1003,42 @@ export default function App() {
         lyrics = safeString(data.lyrics, '가사 없음');
         style_prompt = safeString(data.style_prompt, allTags);
       } else {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${chatgptApiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: systemPrompt }],
-            response_format: { type: 'json_object' }
-          })
-        });
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
+        try {
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${chatgptApiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: systemPrompt }],
+              response_format: { type: 'json_object' }
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(id);
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
+          }
+
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content || '{}';
+          const parsed = extractJSON(content);
+          title = safeString(parsed.title, '제목 없음');
+          lyrics = safeString(parsed.lyrics, '가사 없음');
+          style_prompt = safeString(parsed.style_prompt, allTags);
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError') {
+            throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.');
+          }
+          throw fetchErr;
         }
-
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content || '{}';
-        const parsed = extractJSON(content);
-        title = safeString(parsed.title, '제목 없음');
-        lyrics = safeString(parsed.lyrics, '가사 없음');
-        style_prompt = safeString(parsed.style_prompt, allTags);
       }
 
       const newPrompt: GeneratedPrompt = {
@@ -1099,36 +1115,43 @@ export default function App() {
 * musicType은 보컬이 있으면 "vocal", 연주곡이면 "instrumental"로 제안해주세요.
 * lyricsLengthWithSpaces와 lyricsLengthWithoutSpaces는 숫자로 제안해주세요.`;
 
+    const timeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.')), ms));
+
     try {
       let data;
       if (promptModel === 'gemini') {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-        const result = await ai.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: systemPrompt,
-          config: {
-            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                genres: { type: Type.ARRAY, items: { type: Type.STRING } },
-                subGenres: { type: Type.ARRAY, items: { type: Type.STRING } },
-                moods: { type: Type.ARRAY, items: { type: Type.STRING } },
-                instruments: { type: Type.ARRAY, items: { type: Type.STRING } },
-                excludedElements: { type: Type.ARRAY, items: { type: Type.STRING } },
-                vocalGenders: { type: Type.ARRAY, items: { type: Type.STRING } },
-                vocalTypes: { type: Type.ARRAY, items: { type: Type.STRING } },
-                musicType: { type: Type.STRING },
-                tempo: { type: Type.NUMBER },
-                mainLanguage: { type: Type.STRING },
-                lyricsLengthWithSpaces: { type: Type.NUMBER },
-                lyricsLengthWithoutSpaces: { type: Type.NUMBER }
+        console.log('Gemini Auto Setup starting...');
+        
+        const result = await Promise.race([
+          ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: systemPrompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  genres: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  subGenres: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  moods: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  instruments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  excludedElements: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  vocalGenders: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  vocalTypes: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  musicType: { type: Type.STRING },
+                  tempo: { type: Type.NUMBER },
+                  mainLanguage: { type: Type.STRING },
+                  lyricsLengthWithSpaces: { type: Type.NUMBER },
+                  lyricsLengthWithoutSpaces: { type: Type.NUMBER }
+                }
               }
             }
-          }
-        });
+          }),
+          timeout(120000) // 120 seconds timeout
+        ]) as any;
         
+        console.log('Gemini Auto Setup response received');
         let responseText = '';
         try {
           responseText = result.text || '';
@@ -1146,31 +1169,46 @@ export default function App() {
           throw new Error('AI 응답을 해석하는 데 실패했습니다. 다시 시도해주세요.');
         }
       } else {
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${chatgptApiKey}`
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini',
-            messages: [{ role: 'user', content: systemPrompt }],
-            response_format: { type: 'json_object' }
-          })
-        });
+        console.log('ChatGPT Auto Setup starting...');
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 120000); // 120 seconds timeout
 
-        if (!response.ok) {
-          const errData = await response.json();
-          throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
-        }
-
-        const resData = await response.json();
-        const content = resData.choices?.[0]?.message?.content || '{}';
         try {
-          data = extractJSON(content);
-        } catch (jsonErr) {
-          console.error('JSON Extraction Error (ChatGPT):', jsonErr, 'Content:', content);
-          throw new Error('AI 응답을 해석하는 데 실패했습니다. 다시 시도해주세요.');
+          const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${chatgptApiKey}`
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: systemPrompt }],
+              response_format: { type: 'json_object' }
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(id);
+          
+          console.log('ChatGPT Auto Setup response received');
+
+          if (!response.ok) {
+            const errData = await response.json();
+            throw new Error(errData.error?.message || 'ChatGPT API 요청에 실패했습니다.');
+          }
+
+          const resData = await response.json();
+          const content = resData.choices?.[0]?.message?.content || '{}';
+          try {
+            data = extractJSON(content);
+          } catch (jsonErr) {
+            console.error('JSON Extraction Error (ChatGPT):', jsonErr, 'Content:', content);
+            throw new Error('AI 응답을 해석하는 데 실패했습니다. 다시 시도해주세요.');
+          }
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError') {
+            throw new Error('요청 시간이 초과되었습니다. 다시 시도해주세요.');
+          }
+          throw fetchErr;
         }
       }
 
