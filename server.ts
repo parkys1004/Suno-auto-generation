@@ -224,81 +224,65 @@ async function startServer() {
       }
 
       // Use a simple endpoint to test the key
-      let testUrl = `${apiUrl}/limit`;
-      console.log(`Testing Suno API key at: ${testUrl}`);
+      const testEndpoints = [
+        `${apiUrl}/limit`,
+        `${apiUrl}/get_limit`,
+        `${apiUrl}/feed`,
+        `${apiUrl}/billing/info`,
+        `${apiUrl}/info`,
+        `${apiUrl}/generate/record-info?taskId=test`
+      ];
       
       let response;
-      try {
-        response = await axios.get(testUrl, {
-          headers: { 
-            'Authorization': `Bearer ${apiKey}`,
-            'Accept': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-          },
-          timeout: 15000
-        });
-      } catch (error: any) {
-        console.warn(`Initial test at ${testUrl} failed: ${error.message}`);
-        
-        // If /limit is not found, try /feed as a fallback
-        if (error.response?.status === 404 || error.response?.status === 405) {
-          console.log('/limit not found, trying /feed...');
-          testUrl = `${apiUrl}/feed`;
-          try {
-            response = await axios.get(testUrl, {
-              headers: { 
-                'Authorization': `Bearer ${apiKey}`,
-                'Accept': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-              },
-              timeout: 15000
-            });
-          } catch (feedError: any) {
-            console.warn(`Fallback test at ${testUrl} failed: ${feedError.message}`);
-            
-            // If /feed is also not found, try a generic status check as last resort
-            if (feedError.response?.status === 404 || feedError.response?.status === 405) {
-              console.log('/feed not found, trying /generate/record-info...');
-              testUrl = `${apiUrl}/generate/record-info?taskId=test`;
-              try {
-                response = await axios.get(testUrl, {
-                  headers: { 
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Accept': 'application/json',
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                  },
-                  timeout: 15000
-                });
-              } catch (lastError: any) {
-                console.warn(`Last resort test at ${testUrl} failed: ${lastError.message}`);
-                
-                // If we get a 401/403, it means the key is invalid
-                if (lastError.response?.status === 401 || lastError.response?.status === 403) {
-                  throw lastError;
-                }
-                
-                // If it's a 404, it might be that the test endpoint is missing but the API is there
-                if (lastError.response?.status === 404 || lastError.response?.data?.code === 404 || lastError.response?.data?.msg?.includes('not found')) {
-                   return res.json({ success: true, message: 'API reached, but test endpoint not found. Key might be valid.' });
-                }
-                
-                // If we get a 400 with a specific message, it might be valid
-                if (lastError.response?.status === 400 && lastError.response?.data?.msg?.includes('taskId')) {
-                   return res.json({ success: true, message: 'API reached and key accepted. Ready to generate.' });
-                }
-                
-                throw lastError;
-              }
-            } else {
-              throw feedError;
-            }
+      let lastError: any = null;
+      let successEndpoint = '';
+
+      for (const testUrl of testEndpoints) {
+        try {
+          console.log(`Testing Suno API key at: ${testUrl}`);
+          response = await axios.get(testUrl, {
+            headers: { 
+              'Authorization': `Bearer ${apiKey}`,
+              'Accept': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            timeout: 10000
+          });
+          
+          if (response.status === 200) {
+            successEndpoint = testUrl;
+            break;
           }
-        } else {
-          throw error;
+        } catch (error: any) {
+          lastError = error;
+          console.warn(`Test at ${testUrl} failed: ${error.message}`);
+          
+          // If we get a 401/403, the key is definitely invalid, stop testing
+          if (error.response?.status === 401 || error.response?.status === 403) {
+            throw error;
+          }
+          
+          // If we get a 400 with a specific message, it might be valid (e.g. taskId=test not found)
+          if (error.response?.status === 400 && (error.response?.data?.msg?.includes('taskId') || error.response?.data?.message?.includes('taskId'))) {
+             return res.json({ success: true, message: 'API reached and key accepted. Ready to generate.' });
+          }
+
+          // Continue to next endpoint for 404, 405, 500 etc.
+          continue;
         }
       }
-      
-      res.json({ success: true, data: response.data });
+
+      if (successEndpoint) {
+        return res.json({ success: true, data: response.data, endpoint: successEndpoint });
+      }
+
+      // If all failed but we didn't get 401/403, maybe it's still okay
+      if (lastError && (lastError.response?.status === 404 || lastError.response?.status === 405)) {
+        return res.json({ success: true, message: 'API reached, but common test endpoints not found. Key might be valid.' });
+      }
+
+      if (lastError) throw lastError;
+      throw new Error('All test endpoints failed');
     } catch (error: any) {
       const status = error.response?.status || 500;
       const data = error.response?.data;

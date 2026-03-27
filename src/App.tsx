@@ -102,6 +102,14 @@ export default function App() {
     }
   };
 
+  const sanitizeTag = (val: any, maxLen: number = 30): string => {
+    const str = safeString(val).trim();
+    if (str.length > maxLen) {
+      return str.substring(0, maxLen) + '...';
+    }
+    return str;
+  };
+
   const [apiKey, setApiKey] = useState(() => sanitizeKey(localStorage.getItem('suno_api_key')));
   const [baseUrl, setBaseUrl] = useState(() => localStorage.getItem('suno_base_url') || 'https://api.sunoapi.org/api/v1');
   
@@ -1057,9 +1065,14 @@ export default function App() {
     setIsAutoSetting(true);
     setError('');
 
+    // Truncate description to prevent excessively large AI responses
+    const truncatedDescription = description.length > 2000 
+      ? description.substring(0, 2000) + '... (truncated)' 
+      : description;
+
     const systemPrompt = `당신은 전문적인 음악 프로듀서입니다. 사용자가 입력한 음악 설명을 바탕으로 Suno AI 음악 생성을 위한 최적의 설정을 제안해주세요.
     
-설명: ${description}
+설명: ${truncatedDescription}
 
 반드시 다음 JSON 형식으로 응답해주세요:
 {
@@ -1067,6 +1080,7 @@ export default function App() {
   "subGenres": ["세부장르1"],
   "moods": ["분위기1", "분위기2"],
   "instruments": ["악기1", "악기2"],
+  "excludedElements": ["제외할요소1", "제외할요소2"],
   "vocalGenders": ["남성", "여성" 또는 "없음"],
   "vocalTypes": ["보컬스타일1"],
   "musicType": "vocal" 또는 "instrumental",
@@ -1076,7 +1090,10 @@ export default function App() {
   "lyricsLengthWithoutSpaces": 400
 }
 
-* 장르, 세부장르, 분위기, 악기, 보컬스타일은 한국어로 작성해주세요.
+* 장르, 세부장르, 분위기, 악기, 제외할 요소, 보컬스타일은 한국어로 작성해주세요.
+* **모든 태그(장르, 분위기, 악기, 보컬스타일 등)는 10자 이내의 간결한 단어 또는 구문으로 작성하세요.**
+* **불필요한 설명이나 반복되는 문구(예: "소리리리리" 등)는 절대 포함하지 마세요.**
+* excludedElements는 음악에서 피해야 할 스타일이나 요소(예: "시끄러운 드럼", "슬픈 분위기" 등)를 제안해주세요.
 * vocalGenders는 "남성", "여성", "남녀 듀엣" 등으로 제안해주세요.
 * tempo는 숫자로만 제안해주세요 (예: 120).
 * musicType은 보컬이 있으면 "vocal", 연주곡이면 "instrumental"로 제안해주세요.
@@ -1099,6 +1116,7 @@ export default function App() {
                 subGenres: { type: Type.ARRAY, items: { type: Type.STRING } },
                 moods: { type: Type.ARRAY, items: { type: Type.STRING } },
                 instruments: { type: Type.ARRAY, items: { type: Type.STRING } },
+                excludedElements: { type: Type.ARRAY, items: { type: Type.STRING } },
                 vocalGenders: { type: Type.ARRAY, items: { type: Type.STRING } },
                 vocalTypes: { type: Type.ARRAY, items: { type: Type.STRING } },
                 musicType: { type: Type.STRING },
@@ -1121,7 +1139,12 @@ export default function App() {
           }
         }
 
-        data = extractJSON(responseText || '{}');
+        try {
+          data = extractJSON(responseText || '{}');
+        } catch (jsonErr) {
+          console.error('JSON Extraction Error:', jsonErr, 'Response Text:', responseText);
+          throw new Error('AI 응답을 해석하는 데 실패했습니다. 다시 시도해주세요.');
+        }
       } else {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
@@ -1143,27 +1166,35 @@ export default function App() {
 
         const resData = await response.json();
         const content = resData.choices?.[0]?.message?.content || '{}';
-        data = extractJSON(content);
+        try {
+          data = extractJSON(content);
+        } catch (jsonErr) {
+          console.error('JSON Extraction Error (ChatGPT):', jsonErr, 'Content:', content);
+          throw new Error('AI 응답을 해석하는 데 실패했습니다. 다시 시도해주세요.');
+        }
       }
 
       if (data) {
         if (data.genres && Array.isArray(data.genres)) {
-          setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+          setGenres(data.genres.map((g: any) => ({ id: Math.random().toString(), label: sanitizeTag(g) })));
         }
         if (data.subGenres && Array.isArray(data.subGenres)) {
-          setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+          setSubGenres(data.subGenres.map((g: any) => ({ id: Math.random().toString(), label: sanitizeTag(g) })));
         }
         if (data.moods && Array.isArray(data.moods)) {
-          setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: safeString(m) })));
+          setMoods(data.moods.map((m: any) => ({ id: Math.random().toString(), label: sanitizeTag(m) })));
         }
         if (data.instruments && Array.isArray(data.instruments)) {
-          setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: safeString(i) })));
+          setInstruments(data.instruments.map((i: any) => ({ id: Math.random().toString(), label: sanitizeTag(i) })));
+        }
+        if (data.excludedElements && Array.isArray(data.excludedElements)) {
+          setExcludedElements(data.excludedElements.map((e: any) => ({ id: Math.random().toString(), label: sanitizeTag(e) })));
         }
         if (data.vocalGenders && Array.isArray(data.vocalGenders)) {
-          setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: safeString(g) })));
+          setVocalGenders(data.vocalGenders.map((g: any) => ({ id: Math.random().toString(), label: sanitizeTag(g) })));
         }
         if (data.vocalTypes && Array.isArray(data.vocalTypes)) {
-          setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: safeString(v) })));
+          setVocalTypes(data.vocalTypes.map((v: any) => ({ id: Math.random().toString(), label: sanitizeTag(v) })));
         }
         if (data.musicType) setMusicType(String(data.musicType).toLowerCase() as any);
         if (data.tempo) setTempo(Number(data.tempo) || 80);

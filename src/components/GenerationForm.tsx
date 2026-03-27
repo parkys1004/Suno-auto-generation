@@ -113,12 +113,12 @@ export function GenerationForm({
           <button
             onClick={handleAutoSetup}
             disabled={isAutoSetting || !description.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--accent-primary)]/10 text-[var(--accent-primary)] text-[11px] font-bold hover:bg-[var(--accent-primary)]/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-bold hover:scale-[1.05] active:scale-[0.95] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-xl shadow-indigo-500/40 border border-white/10"
           >
             {isAutoSetting ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <Sparkles className="w-3 h-3" />
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" />
             )}
             AI 자동 설정
           </button>
