@@ -19,6 +19,7 @@ interface SettingsModalProps {
   setBaseUrl: (url: string) => void;
   generatedHistoryCount: number;
   onClearHistory: () => void;
+  onResetAll: () => void;
 }
 
 export function SettingsModal({
@@ -35,7 +36,8 @@ export function SettingsModal({
   baseUrl,
   setBaseUrl,
   generatedHistoryCount,
-  onClearHistory
+  onClearHistory,
+  onResetAll
 }: SettingsModalProps) {
   const [geminiTestStatus, setGeminiTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [chatgptTestStatus, setChatgptTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
@@ -297,19 +299,27 @@ export function SettingsModal({
 
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-[var(--border-color)] bg-[var(--bg-secondary)]/20">
-              <button 
-                onClick={() => {
-                  setGeminiApiKey('');
-                  setChatgptApiKey('');
-                  setApiKey('');
-                  setGeminiTestStatus('idle');
-                  setChatgptTestStatus('idle');
-                  setSunoTestStatus('idle');
-                }}
-                className="text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-              >
-                모두 지우기
-              </button>
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => {
+                    setGeminiApiKey('');
+                    setChatgptApiKey('');
+                    setApiKey('');
+                    setGeminiTestStatus('idle');
+                    setChatgptTestStatus('idle');
+                    setSunoTestStatus('idle');
+                  }}
+                  className="text-xs font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                  모두 지우기
+                </button>
+                <button 
+                  onClick={onResetAll}
+                  className="text-xs font-medium text-red-400 hover:text-red-500 transition-colors"
+                >
+                  전체 초기화
+                </button>
+              </div>
               <button 
                 onClick={onClose}
                 className="px-6 py-2 bg-[var(--text-primary)] text-[var(--bg-primary)] text-sm font-bold rounded-xl hover:opacity-90 transition-opacity"

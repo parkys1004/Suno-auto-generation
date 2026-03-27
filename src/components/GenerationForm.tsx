@@ -67,6 +67,7 @@ interface GenerationFormProps {
   error: string;
   success?: string;
   removeTag: (setFn: React.Dispatch<React.SetStateAction<Tag[]>>, id: string) => void;
+  onReset: () => void;
 }
 
 export function GenerationForm({
@@ -85,7 +86,7 @@ export function GenerationForm({
   excludedElements, setExcludedElements,
   additionalRequest, setAdditionalRequest, genCount, setGenCount,
   lyricsLengthWithSpaces, setLyricsLengthWithSpaces, lyricsLengthWithoutSpaces, setLyricsLengthWithoutSpaces,
-  handleGeneratePrompts, handleGenerate, isGeneratingPrompt, isGenerating, error, success, removeTag
+  handleGeneratePrompts, handleGenerate, isGeneratingPrompt, isGenerating, error, success, removeTag, onReset
 }: GenerationFormProps) {
   // UI States for adding tags
   const [isAddingGenre, setIsAddingGenre] = useState(false);
@@ -1018,6 +1019,13 @@ export function GenerationForm({
           </div>
         )}
         <div className="flex gap-2">
+          <button 
+            onClick={onReset}
+            className="flex-1 bg-[var(--bg-secondary)] hover:bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl py-4 flex items-center justify-center gap-2 text-sm font-bold text-[var(--text-primary)] transition-all active:scale-[0.98]"
+          >
+            <FolderOpen className="w-5 h-5 text-[var(--text-secondary)]" />
+            설정 초기화
+          </button>
           <button 
             onClick={handleGeneratePrompts}
             disabled={isGeneratingPrompt || isGenerating}

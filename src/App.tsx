@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, ThinkingLevel } from "@google/genai";
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 
@@ -110,7 +110,7 @@ export default function App() {
   const [showAdvanced, setShowAdvanced] = useState(true);
   const [genres, setGenres] = useState<Tag[]>([]);
 
-  const [subGenres, setSubGenres] = useState<Tag[]>([{ id: '1', label: 'Lo-fi' }]);
+  const [subGenres, setSubGenres] = useState<Tag[]>([]);
 
   const [musicType, setMusicType] = useState<'vocal' | 'instrumental'>('vocal');
   
@@ -120,7 +120,7 @@ export default function App() {
 
   const [tempo, setTempo] = useState(80);
   
-  const [moods, setMoods] = useState<Tag[]>([{ id: '1', label: '차분한' }]);
+  const [moods, setMoods] = useState<Tag[]>([]);
 
   const [instruments, setInstruments] = useState<Tag[]>([]);
 
@@ -129,10 +129,7 @@ export default function App() {
   const [subLanguageRatio, setSubLanguageRatio] = useState(30);
   const [model, setModel] = useState('V5');
   
-  const [excludedElements, setExcludedElements] = useState<Tag[]>([
-    { id: '1', label: '허밍 (humming)' },
-    { id: '2', label: '긴 인트로 (long intro)' }
-  ]);
+  const [excludedElements, setExcludedElements] = useState<Tag[]>([]);
   const [additionalRequest, setAdditionalRequest] = useState('');
   const [genCount, setGenCount] = useState(1);
   const [lyricsLengthWithSpaces, setLyricsLengthWithSpaces] = useState(800);
@@ -162,6 +159,44 @@ export default function App() {
   }, [success]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleResetForm = () => {
+    if (window.confirm('모든 생성 설정을 초기화하시겠습니까?')) {
+      setDescription('');
+      setGenres([]);
+      setSubGenres([]);
+      setMusicType('vocal');
+      setVocalTypes([]);
+      setVocalGenders([]);
+      setTempo(80);
+      setMoods([]);
+      setInstruments([]);
+      setMainLanguage('한국어');
+      setSubLanguage('');
+      setSubLanguageRatio(30);
+      setModel('V5');
+      setExcludedElements([]);
+      setAdditionalRequest('');
+      setGenCount(1);
+      setLyricsLengthWithSpaces(800);
+      setLyricsLengthWithoutSpaces(400);
+      setSuccess('설정이 초기화되었습니다.');
+    }
+  };
+
+  const handleResetAllSettings = () => {
+    if (window.confirm('모든 API 설정 및 테마를 초기화하시겠습니까?')) {
+      setApiKey('');
+      setBaseUrl('https://api.sunoapi.org/api/v1');
+      setPromptModel('chatgpt');
+      setGeminiApiKey('');
+      setChatgptApiKey('');
+      setTheme('dark');
+      localStorage.clear();
+      setSuccess('모든 설정이 초기화되었습니다. 페이지를 새로고침해주세요.');
+      setTimeout(() => window.location.reload(), 1500);
+    }
+  };
 
   const handleDownloadSettings = () => {
     const settings = {
@@ -927,6 +962,7 @@ export default function App() {
           model: 'gemini-3-flash-preview',
           contents: systemPrompt,
           config: {
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -1054,6 +1090,7 @@ export default function App() {
           model: 'gemini-3-flash-preview',
           contents: systemPrompt,
           config: {
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             responseMimeType: 'application/json',
             responseSchema: {
               type: Type.OBJECT,
@@ -1633,6 +1670,7 @@ export default function App() {
           error={error}
           success={success}
           removeTag={removeTag}
+          onReset={handleResetForm}
         />
 
         {/* Middle Column: Library */}
@@ -1944,6 +1982,7 @@ export default function App() {
         setBaseUrl={setBaseUrl}
         generatedHistoryCount={generatedHistory.length}
         onClearHistory={() => setGeneratedHistory([])}
+        onResetAll={handleResetAllSettings}
       />
 
       <ManualModal 
