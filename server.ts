@@ -376,6 +376,50 @@ async function startServer() {
     }
   });
 
+  app.get('/api/suno/wav/record-info', async (req, res) => {
+    try {
+      const { taskId } = req.query;
+      const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
+      let apiUrl = req.query.baseUrl as string || 'https://api.sunoapi.org/api/v1';
+
+      if (!apiKey) {
+        return res.status(400).json({ error: 'API Key is required' });
+      }
+
+      if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
+        apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
+      }
+      if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
+        apiUrl = 'https://api.sunoapi.org/api/v1';
+      }
+      if (apiUrl.endsWith('/')) {
+        apiUrl = apiUrl.slice(0, -1);
+      }
+
+      const statusUrl = `${apiUrl}/wav/record-info?taskId=${taskId}`;
+      console.log(`Proxying WAV record info check to: ${statusUrl}`);
+      
+      const response = await axios.get(statusUrl, {
+        headers: { 
+          'Authorization': `Bearer ${apiKey}`,
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        timeout: 15000
+      });
+      res.json(response.data);
+    } catch (error: any) {
+      const status = error.response?.status || 500;
+      const data = error.response?.data;
+      console.error(`Suno WAV Status API Error (${status}):`, JSON.stringify(data) || error.message);
+      res.status(status).json({
+        error: data?.message || data?.error || error.message || 'Failed to check WAV status',
+        details: data,
+        code: data?.code || status
+      });
+    }
+  });
+
   app.get('/api/suno/status/:id', async (req, res) => {
     try {
       const { id } = req.params;
@@ -484,9 +528,19 @@ async function startServer() {
 
       response.data.pipe(res);
 
+      // Handle client disconnect
+      res.on('close', () => {
+        console.log('Client disconnected from audio proxy, destroying upstream stream');
+        response.data.destroy();
+      });
+
       // Handle stream errors
       response.data.on('error', (err: any) => {
-        console.error('Stream error:', err.message);
+        // Don't log "aborted" errors as they are usually just client disconnects
+        if (err.message !== 'aborted') {
+          console.error('Stream error:', err.message);
+        }
+        
         if (!res.headersSent) {
           res.status(500).send('Stream error');
         }

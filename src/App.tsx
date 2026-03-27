@@ -730,7 +730,7 @@ export default function App() {
         for (const songId of taskIds) {
           const tId = wavPollingTasks[songId];
           try {
-            const response = await axios.get(`/api/suno/status/${tId}?baseUrl=${encodeURIComponent(baseUrl)}`, {
+            const response = await axios.get(`/api/suno/wav/record-info?taskId=${tId}&baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
@@ -740,39 +740,53 @@ export default function App() {
             }
             
             if (data) {
-              const sunoData = data.response?.sunoData || [];
+              // 신규 WAV record-info 구조 대응 (사용자 제공)
+              const wavUrl = data.response?.audioWavUrl || data.response?.wavUrl;
+              const status = data.successFlag || data.status;
               
-              // WAV 변환의 경우 새로운 ID로 생성될 수 있으므로, 
-              // 원래 songId와 일치하는 것을 찾거나, 배열의 첫 번째 항목을 사용합니다.
-              const songData = sunoData.find((s: any) => s.id === songId) || sunoData[0];
-              
-              if (songData) {
-                const wavUrl = songData.wavUrl || (songData.audioUrl?.endsWith('.wav') ? songData.audioUrl : null);
+              if (wavUrl && status === 'SUCCESS') {
+                setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: wavUrl } : s));
+                setWavPollingTasks(prev => {
+                  const newTasks = { ...prev };
+                  delete newTasks[songId];
+                  return newTasks;
+                });
+                setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
                 
-                // 만약 status가 SUCCESS인데 wavUrl이 없다면, audioUrl을 wavUrl로 간주할 수도 있습니다.
-                // 하지만 확실한 처리를 위해 wavUrl이 있거나 status가 SUCCESS인 경우를 체크합니다.
-                if (wavUrl || (data.status === 'SUCCESS' && songData.audioUrl)) {
-                  const finalWavUrl = wavUrl || songData.audioUrl;
+                // 자동으로 다운로드 실행
+                const song = songs.find(s => s.id === songId);
+                const title = song?.title || 'Untitled';
+                downloadWavFile(wavUrl, title);
+              } else if (status === 'FAILED' || status === 'CREATE_TASK_FAILED' || status === 'GENERATE_AUDIO_FAILED') {
+                setWavPollingTasks(prev => {
+                  const newTasks = { ...prev };
+                  delete newTasks[songId];
+                  return newTasks;
+                });
+                setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
+                alert(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
+              } else {
+                // 기존 구조(sunoData)에 대한 하위 호환성 유지
+                const sunoData = data.response?.sunoData || [];
+                const songData = sunoData.find((s: any) => s.id === songId) || sunoData[0];
+                
+                if (songData) {
+                  const legacyWavUrl = songData.wavUrl || (songData.audioUrl?.endsWith('.wav') ? songData.audioUrl : null);
                   
-                  setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: finalWavUrl } : s));
-                  setWavPollingTasks(prev => {
-                    const newTasks = { ...prev };
-                    delete newTasks[songId];
-                    return newTasks;
-                  });
-                  setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
-                  
-                  // 자동으로 다운로드 실행
-                  const title = songData.title || 'Untitled';
-                  downloadWavFile(finalWavUrl, title);
-                } else if (data.status === 'FAILED' || data.status === 'CREATE_TASK_FAILED' || data.status === 'GENERATE_AUDIO_FAILED' || (data.status === 'SUCCESS' && !wavUrl && !songData.audioUrl)) {
-                  setWavPollingTasks(prev => {
-                    const newTasks = { ...prev };
-                    delete newTasks[songId];
-                    return newTasks;
-                  });
-                  setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
-                  alert(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
+                  if (legacyWavUrl || (status === 'SUCCESS' && songData.audioUrl)) {
+                    const finalWavUrl = legacyWavUrl || songData.audioUrl;
+                    
+                    setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: finalWavUrl } : s));
+                    setWavPollingTasks(prev => {
+                      const newTasks = { ...prev };
+                      delete newTasks[songId];
+                      return newTasks;
+                    });
+                    setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
+                    
+                    const title = songData.title || 'Untitled';
+                    downloadWavFile(finalWavUrl, title);
+                  }
                 }
               }
             }
