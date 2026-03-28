@@ -17,11 +17,32 @@ import { MusicLibrary } from './components/MusicLibrary';
 import { PromptLibrary } from './components/PromptLibrary';
 import { GenerationForm } from './components/GenerationForm';
 import { ManualModal } from './components/ManualModal';
+import { ConfirmModal } from './components/ConfirmModal';
 
 export default function App() {
   const [showScrollTop, setShowScrollTop] = useState(false);
   const [isManualOpen, setIsManualOpen] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
   const libraryScrollRef = useRef<HTMLDivElement>(null);
+
+  const requestConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      onConfirm
+    });
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -169,7 +190,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleResetForm = () => {
-    if (window.confirm('모든 생성 설정을 초기화하시겠습니까?')) {
+    requestConfirm('설정 초기화', '모든 생성 설정을 초기화하시겠습니까?', () => {
       setDescription('');
       setGenres([]);
       setSubGenres([]);
@@ -189,11 +210,11 @@ export default function App() {
       setLyricsLengthWithSpaces(800);
       setLyricsLengthWithoutSpaces(400);
       setSuccess('설정이 초기화되었습니다.');
-    }
+    });
   };
 
   const handleResetAllSettings = () => {
-    if (window.confirm('모든 API 설정 및 테마를 초기화하시겠습니까?')) {
+    requestConfirm('전체 설정 초기화', '모든 API 설정 및 테마를 초기화하시겠습니까?', () => {
       setApiKey('');
       setBaseUrl('https://api.sunoapi.org/api/v1');
       setPromptModel('chatgpt');
@@ -203,7 +224,7 @@ export default function App() {
       localStorage.clear();
       setSuccess('모든 설정이 초기화되었습니다. 페이지를 새로고침해주세요.');
       setTimeout(() => window.location.reload(), 1500);
-    }
+    });
   };
 
   const handleDownloadSettings = () => {
@@ -807,7 +828,7 @@ export default function App() {
                   return newTasks;
                 });
                 setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
-                alert(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
+                setError(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
               } else {
                 // 기존 구조(sunoData)에 대한 하위 호환성 유지
                 const sunoData = data.response?.sunoData || [];
@@ -1838,10 +1859,10 @@ export default function App() {
                     <div className="flex items-center gap-2 ml-auto">
                       <button 
                         onClick={() => {
-                          if (window.confirm(`${selectedPrompts.size}개의 프롬프트를 삭제하시겠습니까?`)) {
+                          requestConfirm('프롬프트 삭제', `${selectedPrompts.size}개의 프롬프트를 삭제하시겠습니까?`, () => {
                             setPrompts(prev => prev.filter(p => !selectedPrompts.has(p.id)));
                             setSelectedPrompts(new Set());
-                          }
+                          });
                         }}
                         className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 text-xs font-bold hover:bg-red-500/20 transition-all"
                       >
@@ -2057,6 +2078,14 @@ export default function App() {
       <ManualModal 
         isOpen={isManualOpen}
         onClose={() => setIsManualOpen(false)}
+      />
+
+      <ConfirmModal
+        isOpen={confirmConfig.isOpen}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
       />
 
       <style dangerouslySetInnerHTML={{ __html: `

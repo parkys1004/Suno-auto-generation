@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ExternalLink, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import axios from 'axios';
+import { ConfirmModal } from './ConfirmModal';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -43,6 +44,26 @@ export function SettingsModal({
   const [chatgptTestStatus, setChatgptTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [sunoTestStatus, setSunoTestStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [sunoError, setSunoError] = useState<string>('');
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  });
+
+  const requestConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmConfig({
+      isOpen: true,
+      title,
+      message,
+      onConfirm
+    });
+  };
 
   const testGeminiKey = async () => {
     if (!geminiApiKey) return;
@@ -94,6 +115,7 @@ export function SettingsModal({
   };
 
   return (
+    <>
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -284,9 +306,9 @@ export function SettingsModal({
                 </div>
                 <button
                   onClick={() => {
-                    if (window.confirm('모든 생성 기록을 삭제하시겠습니까? 중복 방지 기능이 초기화됩니다.')) {
+                    requestConfirm('생성 기록 삭제', '모든 생성 기록을 삭제하시겠습니까? 중복 방지 기능이 초기화됩니다.', () => {
                       onClearHistory();
-                    }
+                    });
                   }}
                   disabled={generatedHistoryCount === 0}
                   className="w-full py-2.5 px-4 bg-red-400/10 hover:bg-red-400/20 text-red-400 text-xs font-bold rounded-xl border border-red-400/20 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
@@ -331,5 +353,13 @@ export function SettingsModal({
         </div>
       )}
     </AnimatePresence>
+    <ConfirmModal
+      isOpen={confirmConfig.isOpen}
+      title={confirmConfig.title}
+      message={confirmConfig.message}
+      onConfirm={confirmConfig.onConfirm}
+      onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+    />
+    </>
   );
 }
