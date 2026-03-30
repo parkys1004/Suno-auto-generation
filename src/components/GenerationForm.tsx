@@ -827,7 +827,13 @@ export function GenerationForm({
                 </div>
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wider">Suno 모델 버전</label>
-                  <div className="grid grid-cols-2 gap-2 p-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl">
+                  <div className="grid grid-cols-3 gap-2 p-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl">
+                    <button 
+                      onClick={() => setModel('V5_5')}
+                      className={`py-2.5 rounded-lg text-sm font-bold transition-all ${model === 'V5_5' ? 'bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-lg' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                    >
+                      V5.5
+                    </button>
                     <button 
                       onClick={() => setModel('V5')}
                       className={`py-2.5 rounded-lg text-sm font-bold transition-all ${model === 'V5' ? 'bg-[var(--text-primary)] text-[var(--bg-primary)] shadow-lg' : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
