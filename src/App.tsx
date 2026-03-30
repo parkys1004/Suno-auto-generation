@@ -90,12 +90,15 @@ export default function App() {
     selectAllPrompts,
     selectTodayPrompts,
     handleGeneratePrompts
-  } = usePromptGeneration(
+  } = usePromptGeneration({
     description, geminiApiKey, chatgptApiKey, promptModel,
     setGenres, setSubGenres, setMoods, setInstruments, setExcludedElements,
     setVocalGenders, setVocalTypes, setMusicType, setTempo, setMainLanguage,
-    setLyricsLengthWithSpaces, setLyricsLengthWithoutSpaces, setError, setSuccess
-  );
+    setSubLanguage, setSubLanguageRatio,
+    setLyricsLengthWithSpaces, setLyricsLengthWithoutSpaces, setError, setSuccess,
+    genres, subGenres, moods, instruments, excludedElements, vocalGenders, vocalTypes,
+    musicType, tempo, mainLanguage, subLanguage, subLanguageRatio, additionalRequest, lyricsLengthWithSpaces, lyricsLengthWithoutSpaces
+  });
 
   const {
     songs, setSongs,

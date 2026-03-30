@@ -3,26 +3,81 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { GeneratedPrompt, Tag } from '../types';
 import { extractJSON, sanitizeTag } from '../utils/helpers';
 
-export const usePromptGeneration = (
-  description: string,
-  geminiApiKey: string,
-  chatgptApiKey: string,
-  promptModel: 'chatgpt' | 'gemini',
-  setGenres: (genres: Tag[]) => void,
-  setSubGenres: (subGenres: Tag[]) => void,
-  setMoods: (moods: Tag[]) => void,
-  setInstruments: (instruments: Tag[]) => void,
-  setExcludedElements: (excludedElements: Tag[]) => void,
-  setVocalGenders: (vocalGenders: Tag[]) => void,
-  setVocalTypes: (vocalTypes: Tag[]) => void,
-  setMusicType: (musicType: 'vocal' | 'instrumental') => void,
-  setTempo: (tempo: number) => void,
-  setMainLanguage: (mainLanguage: string) => void,
-  setLyricsLengthWithSpaces: (len: number) => void,
-  setLyricsLengthWithoutSpaces: (len: number) => void,
-  setError: React.Dispatch<React.SetStateAction<string>>,
-  setSuccess: React.Dispatch<React.SetStateAction<string>>
-) => {
+export interface PromptGenerationProps {
+  description: string;
+  geminiApiKey: string;
+  chatgptApiKey: string;
+  promptModel: 'chatgpt' | 'gemini';
+  setGenres: (genres: Tag[]) => void;
+  setSubGenres: (subGenres: Tag[]) => void;
+  setMoods: (moods: Tag[]) => void;
+  setInstruments: (instruments: Tag[]) => void;
+  setExcludedElements: (excludedElements: Tag[]) => void;
+  setVocalGenders: (vocalGenders: Tag[]) => void;
+  setVocalTypes: (vocalTypes: Tag[]) => void;
+  setMusicType: (musicType: 'vocal' | 'instrumental') => void;
+  setTempo: (tempo: number) => void;
+  setMainLanguage: (mainLanguage: string) => void;
+  setSubLanguage: (subLanguage: string) => void;
+  setSubLanguageRatio: (ratio: number) => void;
+  setLyricsLengthWithSpaces: (len: number) => void;
+  setLyricsLengthWithoutSpaces: (len: number) => void;
+  setError: React.Dispatch<React.SetStateAction<string>>;
+  setSuccess: React.Dispatch<React.SetStateAction<string>>;
+  genres: Tag[];
+  subGenres: Tag[];
+  moods: Tag[];
+  instruments: Tag[];
+  excludedElements: Tag[];
+  vocalGenders: Tag[];
+  vocalTypes: Tag[];
+  musicType: 'vocal' | 'instrumental';
+  tempo: number;
+  mainLanguage: string;
+  subLanguage: string;
+  subLanguageRatio: number;
+  additionalRequest: string;
+  lyricsLengthWithSpaces: number;
+  lyricsLengthWithoutSpaces: number;
+}
+
+export const usePromptGeneration = ({
+  description,
+  geminiApiKey,
+  chatgptApiKey,
+  promptModel,
+  setGenres,
+  setSubGenres,
+  setMoods,
+  setInstruments,
+  setExcludedElements,
+  setVocalGenders,
+  setVocalTypes,
+  setMusicType,
+  setTempo,
+  setMainLanguage,
+  setSubLanguage,
+  setSubLanguageRatio,
+  setLyricsLengthWithSpaces,
+  setLyricsLengthWithoutSpaces,
+  setError,
+  setSuccess,
+  genres,
+  subGenres,
+  moods,
+  instruments,
+  excludedElements,
+  vocalGenders,
+  vocalTypes,
+  musicType,
+  tempo,
+  mainLanguage,
+  subLanguage,
+  subLanguageRatio,
+  additionalRequest,
+  lyricsLengthWithSpaces,
+  lyricsLengthWithoutSpaces
+}: PromptGenerationProps) => {
   const [prompts, setPrompts] = useState<GeneratedPrompt[]>(() => {
     try {
       const saved = localStorage.getItem('generated_prompts');
@@ -80,19 +135,44 @@ export const usePromptGeneration = (
       ? `\n\n최근 생성 이력 (중복 피하기):\n${historyToUse.map(h => `- 제목: ${h.title}`).join('\n')}`
       : '';
 
-    const systemPrompt = `당신은 전문적인 작사가이자 음악 프로듀서입니다. 사용자의 요청을 바탕으로 Suno AI 음악 생성을 위한 최적의 프롬프트를 작성해주세요.
+    const settingsText = `
+[적용할 설정]
+- 주 언어: ${mainLanguage}
+${subLanguage ? `- 보조 언어: ${subLanguage} (비율: ${subLanguageRatio}%)` : ''}
+- 장르: ${genres.map(g => g.label).join(', ') || '지정 안 함'}
+- 세부 장르: ${subGenres.map(g => g.label).join(', ') || '지정 안 함'}
+- 분위기: ${moods.map(g => g.label).join(', ') || '지정 안 함'}
+- 악기: ${instruments.map(g => g.label).join(', ') || '지정 안 함'}
+- 제외할 요소: ${excludedElements.map(g => g.label).join(', ') || '지정 안 함'}
+- 보컬 성별: ${vocalGenders.map(g => g.label).join(', ') || '지정 안 함'}
+- 보컬 스타일: ${vocalTypes.map(g => g.label).join(', ') || '지정 안 함'}
+- 음악 종류: ${musicType === 'vocal' ? '보컬곡' : '연주곡(Instrumental)'}
+- 템포(BPM): ${tempo}
+- 가사 길이(공백 포함): 약 ${lyricsLengthWithSpaces}자
+- 가사 길이(공백 제외): 약 ${lyricsLengthWithoutSpaces}자
+${additionalRequest ? `- 추가 요청사항: ${additionalRequest}` : ''}
+`;
+
+    const systemPrompt = `당신은 전문적인 작사가이자 음악 프로듀서입니다. 사용자의 요청과 설정을 바탕으로 Suno AI 음악 생성을 위한 최적의 프롬프트를 작성해주세요.
     
 설명: ${description}${historyText}
+${settingsText}
 
 반드시 다음 JSON 형식으로 응답해주세요:
 {
-  "title": "곡 제목 (한국어)",
-  "lyrics": "가사 (한국어, [Verse], [Chorus], [Bridge] 등 구조 포함)",
+  "title": "곡 제목 (${mainLanguage})",
+  "lyrics": "가사 (${mainLanguage}${subLanguage ? ` 및 ${subLanguage}` : ''}, [Verse], [Chorus], [Bridge] 등 구조 포함)",
   "style_prompt": "음악 스타일 태그 (영어, 쉼표로 구분, 예: k-pop, upbeat, female vocal, synth-pop)"
 }
 
 * 가사는 감성적이고 완성도 있게 작성해주세요.
-* style_prompt는 Suno AI가 잘 이해할 수 있는 핵심 키워드 위주로 작성해주세요.
+* 가사의 언어는 반드시 [적용할 설정]의 '주 언어(${mainLanguage})'에 맞게 작성해주세요.
+${subLanguage ? `* 가사에 보조 언어(${subLanguage})를 약 ${subLanguageRatio}% 비율로 자연스럽게 섞어서 작성해주세요.` : ''}
+* 가사의 길이는 [적용할 설정]의 가사 길이를 최대한 반영해주세요.
+* style_prompt는 Suno AI가 잘 이해할 수 있는 핵심 키워드 위주로 작성하되, [적용할 설정]의 장르, 분위기, 악기, 보컬 설정 등을 영어로 번역하여 포함해주세요.
+* 제외할 요소가 있다면 style_prompt에 반영하지 않도록 주의해주세요.
+* 음악 종류가 연주곡(Instrumental)인 경우 가사(lyrics)는 비워두거나 "[Instrumental]"로만 작성해주세요.
+${additionalRequest ? `* **추가 요청사항을 반드시 반영해주세요:** ${additionalRequest}` : ''}
 * **이전 생성 이력과 중복되지 않는 새로운 제목과 내용을 제안해주세요.**`;
 
     try {
@@ -147,6 +227,13 @@ export const usePromptGeneration = (
           }),
           timeoutPromise
         ]) as Response;
+        
+        clearTimeout(timeoutId!);
+        
+        if (!response.ok) {
+          throw new Error(`API 요청 실패: ${response.status}`);
+        }
+        
         const resData = await response.json();
         data = extractJSON(resData.choices?.[0]?.message?.content || '{}');
       }
@@ -167,10 +254,11 @@ export const usePromptGeneration = (
       }
       return null;
     } catch (err: any) {
+      console.error('Prompt generation error:', err);
       setError(err.message || '프롬프트 생성에 실패했습니다.');
       return null;
     } finally {
-      if (timeoutId!) clearTimeout(timeoutId);
+      clearTimeout(timeoutId!);
       setIsGeneratingPrompt(false);
     }
   };
@@ -213,6 +301,8 @@ export const usePromptGeneration = (
   "musicType": "vocal" 또는 "instrumental",
   "tempo": 80,
   "mainLanguage": "한국어",
+  "subLanguage": "영어",
+  "subLanguageRatio": 30,
   "lyricsLengthWithSpaces": 800,
   "lyricsLengthWithoutSpaces": 400
 }
@@ -224,6 +314,9 @@ export const usePromptGeneration = (
 * vocalGenders는 "남성", "여성", "남녀 듀엣" 등으로 제안해주세요.
 * tempo는 숫자로만 제안해주세요 (예: 120).
 * musicType은 보컬이 있으면 "vocal", 연주곡이면 "instrumental"로 제안해주세요.
+* mainLanguage는 주로 사용할 언어를 제안해주세요 (예: 한국어, 영어, 일본어 등).
+* subLanguage는 보조로 섞어 쓸 언어가 있다면 제안하고, 없다면 빈 문자열("")로 제안해주세요.
+* subLanguageRatio는 보조 언어가 있을 경우 그 비율을 숫자로 제안해주세요 (예: 30).
 * lyricsLengthWithSpaces와 lyricsLengthWithoutSpaces는 숫자로 제안해주세요.`;
 
     let timeoutId: NodeJS.Timeout;
@@ -254,6 +347,8 @@ export const usePromptGeneration = (
                   musicType: { type: Type.STRING },
                   tempo: { type: Type.NUMBER },
                   mainLanguage: { type: Type.STRING },
+                  subLanguage: { type: Type.STRING },
+                  subLanguageRatio: { type: Type.NUMBER },
                   lyricsLengthWithSpaces: { type: Type.NUMBER },
                   lyricsLengthWithoutSpaces: { type: Type.NUMBER }
                 }
@@ -291,6 +386,13 @@ export const usePromptGeneration = (
           }),
           timeoutPromise
         ]) as Response;
+        
+        clearTimeout(timeoutId!);
+        
+        if (!response.ok) {
+          throw new Error(`API 요청 실패: ${response.status}`);
+        }
+        
         const resData = await response.json();
         data = extractJSON(resData.choices?.[0]?.message?.content || '{}');
       }
@@ -320,15 +422,18 @@ export const usePromptGeneration = (
         if (data.musicType) setMusicType(data.musicType as 'vocal' | 'instrumental');
         if (data.tempo) setTempo(data.tempo);
         if (data.mainLanguage) setMainLanguage(data.mainLanguage);
+        if (data.subLanguage !== undefined) setSubLanguage(data.subLanguage);
+        if (data.subLanguageRatio !== undefined) setSubLanguageRatio(data.subLanguageRatio);
         if (data.lyricsLengthWithSpaces) setLyricsLengthWithSpaces(data.lyricsLengthWithSpaces);
         if (data.lyricsLengthWithoutSpaces) setLyricsLengthWithoutSpaces(data.lyricsLengthWithoutSpaces);
         
         setSuccess('AI가 음악 설정을 자동으로 완료했습니다.');
       }
     } catch (err: any) {
+      console.error('Auto setup error:', err);
       setError(err.message || '자동 설정에 실패했습니다.');
     } finally {
-      if (timeoutId!) clearTimeout(timeoutId);
+      clearTimeout(timeoutId!);
       setIsAutoSetting(false);
     }
   };
