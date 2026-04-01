@@ -353,6 +353,13 @@ export const useSunoApi = (
     }
   };
 
+  const handleBatchDelete = (selectedSongs: Set<string>) => {
+    if (selectedSongs.size === 0) return;
+    setSongs(prev => prev.filter(s => !selectedSongs.has(s.id)));
+    setSelectedSongs(new Set());
+    setSuccess(`${selectedSongs.size}개의 곡이 삭제되었습니다.`);
+  };
+
   const handleGenerate = async () => {
     if (!apiKey) {
       setError('API 키를 입력해주세요.');
@@ -606,19 +613,32 @@ export const useSunoApi = (
     }
   };
 
-  const toggleSongSelection = (id: string) => {
+  const toggleSongSelection = (id: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
     const newSelected = new Set(selectedSongs);
     if (newSelected.has(id)) newSelected.delete(id);
     else newSelected.add(id);
     setSelectedSongs(newSelected);
   };
 
-  const selectAllSongs = () => {
-    if (selectedSongs.size === songs.length) setSelectedSongs(new Set());
-    else setSelectedSongs(new Set(songs.map(s => s.id)));
+  const selectAllSongs = (filteredIds?: string[]) => {
+    const idsToSelect = filteredIds || songs.map(s => s.id);
+    const allSelected = idsToSelect.length > 0 && idsToSelect.every(id => selectedSongs.has(id));
+    
+    if (allSelected) {
+      const newSelected = new Set(selectedSongs);
+      idsToSelect.forEach(id => newSelected.delete(id));
+      setSelectedSongs(newSelected);
+    } else {
+      const newSelected = new Set(selectedSongs);
+      idsToSelect.forEach(id => newSelected.add(id));
+      setSelectedSongs(newSelected);
+    }
   };
 
-  const selectSongsByRange = (range: 'hour' | 'today' | '24h' | '7d') => {
+  const selectSongsByRange = (range: 'hour' | 'today' | '24h' | '7d', filteredIds?: string[]) => {
     const now = new Date();
     let cutoff: Date;
     
@@ -630,19 +650,41 @@ export const useSunoApi = (
       default: return;
     }
 
-    const newSelected = new Set(selectedSongs);
+    const idsToSelect: string[] = [];
+    const idsToCheck = filteredIds ? new Set(filteredIds) : new Set(songs.map(s => s.id));
+    
     songs.forEach(s => {
+      if (!idsToCheck.has(s.id)) return;
       const createdAt = new Date(s.created_at);
       if (createdAt >= cutoff) {
-        newSelected.add(s.id);
+        idsToSelect.push(s.id);
       }
     });
+    
+    if (idsToSelect.length === 0) return;
+
+    const allSelected = idsToSelect.every(id => selectedSongs.has(id));
+    const newSelected = new Set(selectedSongs);
+    
+    if (allSelected) {
+      // Toggle off
+      idsToSelect.forEach(id => newSelected.delete(id));
+    } else {
+      // Add to selection
+      idsToSelect.forEach(id => newSelected.add(id));
+    }
     setSelectedSongs(newSelected);
   };
 
   const selectGroupSongs = (songIds: string[]) => {
     const newSelected = new Set(selectedSongs);
-    songIds.forEach(id => newSelected.add(id));
+    const allSelected = songIds.every(id => newSelected.has(id));
+    
+    if (allSelected) {
+      songIds.forEach(id => newSelected.delete(id));
+    } else {
+      songIds.forEach(id => newSelected.add(id));
+    }
     setSelectedSongs(newSelected);
   };
 
@@ -664,6 +706,7 @@ export const useSunoApi = (
     handleGenerateWav,
     handleDownload,
     handleBatchDownload,
+    handleBatchDelete,
     handleGenerate,
     handleBatchGenerate,
     recheckStatus,

@@ -67,7 +67,6 @@ export const useUIState = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'complete' | 'favorite'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
-  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
 
   const [isApiModalOpen, setIsApiModalOpen] = useState(false);
 
@@ -87,7 +86,6 @@ export const useUIState = () => {
     selectedPrompts, setSelectedPrompts,
     searchQuery, setSearchQuery,
     filter, setFilter,
-    sortBy, setSortBy,
-    selectedSongs, setSelectedSongs
+    sortBy, setSortBy
   };
 };

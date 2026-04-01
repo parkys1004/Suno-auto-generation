@@ -41,8 +41,7 @@ export default function App() {
     selectedPrompts, setSelectedPrompts,
     searchQuery, setSearchQuery,
     filter, setFilter,
-    sortBy, setSortBy,
-    selectedSongs, setSelectedSongs
+    sortBy, setSortBy
   } = useUIState();
 
   const {
@@ -109,12 +108,14 @@ export default function App() {
     handleGenerateWav,
     handleDownload,
     handleBatchDownload,
+    handleBatchDelete,
     handleGenerate,
     handleBatchGenerate,
     recheckStatus,
     toggleFavorite,
     handleDelete,
     handleGenerateFromPrompt,
+    selectedSongs,
     toggleSongSelection,
     selectAllSongs,
     selectSongsByRange,
@@ -283,13 +284,13 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-1 p-1 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl">
                     <button 
-                      onClick={() => selectAllPrompts(setSelectedPrompts)}
+                      onClick={() => selectAllPrompts(selectedPrompts, setSelectedPrompts)}
                       className="px-3 py-1 rounded-lg text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                     >
                       전체 선택
                     </button>
                     <button 
-                      onClick={() => selectTodayPrompts(setSelectedPrompts)}
+                      onClick={() => selectTodayPrompts(selectedPrompts, setSelectedPrompts)}
                       className="px-3 py-1 rounded-lg text-xs font-bold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all"
                     >
                       오늘 생성
@@ -359,6 +360,11 @@ export default function App() {
                 selectSongsByRange={selectSongsByRange}
                 selectGroupSongs={selectGroupSongs}
                 handleBatchDownload={() => handleBatchDownload(selectedSongs)}
+                handleBatchDelete={() => {
+                  requestConfirm('음악 삭제', `${selectedSongs.size}개의 곡을 삭제하시겠습니까?`, () => {
+                    handleBatchDelete(selectedSongs);
+                  });
+                }}
               />
             ) : (
               <PromptLibrary 

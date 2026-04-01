@@ -455,16 +455,27 @@ ${additionalRequest ? `* **추가 요청사항을 반드시 반영해주세요:*
     setSelectedPrompts(newSelected);
   };
 
-  const selectAllPrompts = (setSelectedPrompts: (s: Set<string>) => void) => {
+  const selectAllPrompts = (selectedPrompts: Set<string>, setSelectedPrompts: (s: Set<string>) => void) => {
     if (prompts.length === 0) return;
-    setSelectedPrompts(new Set(prompts.map(p => p.id)));
+    if (selectedPrompts.size === prompts.length) {
+      setSelectedPrompts(new Set());
+    } else {
+      setSelectedPrompts(new Set(prompts.map(p => p.id)));
+    }
   };
 
-  const selectTodayPrompts = (setSelectedPrompts: (s: Set<string>) => void) => {
+  const selectTodayPrompts = (selectedPrompts: Set<string>, setSelectedPrompts: (s: Set<string>) => void) => {
     const today = new Date().toISOString().slice(0, 10);
     const todayPrompts = prompts.filter(p => p.created_at.slice(0, 10) === today);
     if (todayPrompts.length === 0) return;
-    setSelectedPrompts(new Set(todayPrompts.map(p => p.id)));
+    
+    const allTodaySelected = todayPrompts.every(p => selectedPrompts.has(p.id)) && todayPrompts.length === selectedPrompts.size;
+    
+    if (allTodaySelected) {
+      setSelectedPrompts(new Set());
+    } else {
+      setSelectedPrompts(new Set(todayPrompts.map(p => p.id)));
+    }
   };
 
   const handleGeneratePrompts = async (genCount: number, setLibraryTab: (tab: 'music' | 'prompts') => void) => {

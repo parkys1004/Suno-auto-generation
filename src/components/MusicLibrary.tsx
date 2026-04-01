@@ -18,10 +18,11 @@ interface MusicLibraryProps {
   isGeneratingWav: Record<string, boolean>;
   selectedSongs: Set<string>;
   toggleSongSelection: (id: string, e: React.MouseEvent) => void;
-  selectAllSongs: () => void;
-  selectSongsByRange: (range: 'hour' | 'today' | '24h' | '7d') => void;
+  selectAllSongs: (filteredIds?: string[]) => void;
+  selectSongsByRange: (range: 'hour' | 'today' | '24h' | '7d', filteredIds?: string[]) => void;
   selectGroupSongs: (songIds: string[]) => void;
   handleBatchDownload: () => void;
+  handleBatchDelete: () => void;
 }
 
 export function MusicLibrary({
@@ -43,7 +44,8 @@ export function MusicLibrary({
   selectAllSongs,
   selectSongsByRange,
   selectGroupSongs,
-  handleBatchDownload
+  handleBatchDownload,
+  handleBatchDelete
 }: MusicLibraryProps) {
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const [showSelectionMenu, setShowSelectionMenu] = useState(false);
@@ -109,14 +111,23 @@ export function MusicLibrary({
       {/* Bulk Actions Bar */}
       <div className="flex items-center justify-between bg-[var(--bg-secondary)] p-3 rounded-xl border border-[var(--border-color)] sticky top-0 z-20 shadow-lg backdrop-blur-md">
         <div className="flex items-center gap-4">
-          <div className="relative">
+          <div className="relative flex items-center bg-[var(--bg-primary)] rounded-lg border border-[var(--border-color)]">
             <button 
-              onClick={() => setShowSelectionMenu(!showSelectionMenu)}
-              className="flex items-center gap-2 text-xs font-bold text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors bg-[var(--bg-primary)] px-3 py-1.5 rounded-lg border border-[var(--border-color)]"
+              onClick={() => selectAllSongs(filteredSongs.map(s => s.id))}
+              className="flex items-center justify-center pl-3 pr-2 py-1.5 hover:text-[var(--accent-primary)] transition-colors"
+              title="전체 선택/해제"
             >
               <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${allSelected ? 'bg-[var(--accent-primary)] border-[var(--accent-primary)]' : 'border-[var(--text-secondary)]'}`}>
                 {allSelected && <div className="w-2 h-2 bg-white rounded-sm" />}
               </div>
+            </button>
+            
+            <div className="w-px h-4 bg-[var(--border-color)] mx-1" />
+            
+            <button 
+              onClick={() => setShowSelectionMenu(!showSelectionMenu)}
+              className="flex items-center gap-1.5 pr-3 pl-2 py-1.5 text-xs font-bold text-[var(--text-primary)] hover:text-[var(--accent-primary)] transition-colors"
+            >
               선택 옵션
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showSelectionMenu ? 'rotate-180' : ''}`} />
             </button>
@@ -129,32 +140,25 @@ export function MusicLibrary({
                 />
                 <div className="absolute top-full left-0 mt-2 w-48 bg-[var(--bg-secondary)] border border-[var(--border-color)] rounded-xl shadow-2xl z-20 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2">
                   <button 
-                    onClick={() => { selectAllSongs(); setShowSelectionMenu(false); }}
-                    className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors flex items-center justify-between"
-                  >
-                    전체 선택/해제
-                  </button>
-                  <div className="h-px bg-[var(--border-color)] my-1" />
-                  <button 
-                    onClick={() => { selectSongsByRange('hour'); setShowSelectionMenu(false); }}
+                    onClick={() => { selectSongsByRange('hour', filteredSongs.map(s => s.id)); setShowSelectionMenu(false); }}
                     className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
                   >
                     최근 1시간 이내
                   </button>
                   <button 
-                    onClick={() => { selectSongsByRange('today'); setShowSelectionMenu(false); }}
+                    onClick={() => { selectSongsByRange('today', filteredSongs.map(s => s.id)); setShowSelectionMenu(false); }}
                     className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
                   >
                     오늘 생성된 곡
                   </button>
                   <button 
-                    onClick={() => { selectSongsByRange('24h'); setShowSelectionMenu(false); }}
+                    onClick={() => { selectSongsByRange('24h', filteredSongs.map(s => s.id)); setShowSelectionMenu(false); }}
                     className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
                   >
                     최근 24시간 이내
                   </button>
                   <button 
-                    onClick={() => { selectSongsByRange('7d'); setShowSelectionMenu(false); }}
+                    onClick={() => { selectSongsByRange('7d', filteredSongs.map(s => s.id)); setShowSelectionMenu(false); }}
                     className="w-full text-left px-4 py-2 text-xs hover:bg-[var(--bg-primary)] text-[var(--text-primary)] transition-colors"
                   >
                     최근 7일 이내
@@ -172,13 +176,22 @@ export function MusicLibrary({
         </div>
         
         {selectedSongs.size > 0 && (
-          <button 
-            onClick={handleBatchDownload}
-            className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-[var(--accent-primary)]/20"
-          >
-            <Download className="w-3.5 h-3.5" />
-            선택 항목 다운로드 (ZIP)
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleBatchDelete}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/20 transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              선택 삭제
+            </button>
+            <button 
+              onClick={handleBatchDownload}
+              className="flex items-center gap-2 px-3 py-1.5 bg-[var(--accent-primary)] text-white rounded-lg text-xs font-bold hover:opacity-90 transition-all shadow-md shadow-[var(--accent-primary)]/20"
+            >
+              <Download className="w-3.5 h-3.5" />
+              선택 다운로드 (ZIP)
+            </button>
+          </div>
         )}
       </div>
 
