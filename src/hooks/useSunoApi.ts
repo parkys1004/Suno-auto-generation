@@ -310,13 +310,18 @@ export const useSunoApi = (
       
       if (response.data) {
         let resData = response.data;
-        if (resData.code === 200 || resData.code === 0) {
+        const isAlreadyExists = (resData.msg || resData.message || "").includes("already exists");
+
+        if (resData.code === 200 || resData.code === 0 || isAlreadyExists) {
+          if (isAlreadyExists) {
+            console.log("WAV record already exists, starting polling...");
+          }
           resData = resData.data || resData;
         } else if (resData.code !== undefined) {
           throw new Error(resData.msg || resData.message || `API 오류 (코드: ${resData.code})`);
         }
 
-        let newTaskId = resData.taskId || resData.task_id || resData.id;
+        let newTaskId = resData.taskId || resData.task_id || resData.id || (isAlreadyExists ? effectiveTaskId : null);
         
         if (!newTaskId && Array.isArray(resData) && resData.length > 0) {
           newTaskId = resData[0].taskId || resData[0].task_id || resData[0].id;
@@ -348,8 +353,19 @@ export const useSunoApi = (
       }
     } catch (err: any) {
       console.error('WAV generation failed:', err);
+      
+      const resData = err.response?.data;
+      const errorMsg = resData?.message || resData?.msg || err.message;
+      const isAlreadyExists = errorMsg.includes("already exists");
+
+      if (isAlreadyExists) {
+        const effectiveTaskId = song.taskId || song.id;
+        setSuccess('이미 변환 기록이 존재합니다. 상태를 확인합니다...');
+        setWavPollingTasks(prev => ({ ...prev, [song.id]: effectiveTaskId }));
+        return;
+      }
+
       setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
-      const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message;
       setError(`WAV 변환 요청 실패: ${errorMsg}`);
     }
   };
