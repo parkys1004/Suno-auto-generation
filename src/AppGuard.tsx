@@ -35,6 +35,9 @@ export default function AppGuard({ children }: { children: ReactNode }) {
           if (err.message && err.message.includes('offline')) {
             throw new Error("Firestore 서버에 연결할 수 없습니다. 인터넷 연결이나 Firebase 설정을 확인해주세요.");
           }
+          if (err.message && err.message.includes('not found')) {
+            throw new Error("Firestore 데이터베이스가 생성되지 않았습니다. Firebase 콘솔에서 'Firestore Database'를 생성해주세요.");
+          }
           throw err;
         });
         let serverPw = "";
@@ -51,6 +54,9 @@ export default function AppGuard({ children }: { children: ReactNode }) {
           const querySnapshot = await getDocs(q).catch(err => {
             if (err.message && err.message.includes('offline')) {
               throw new Error("Firestore 서버 연결 실패 (사용자 확인 중)");
+            }
+            if (err.message && err.message.includes('not found')) {
+              throw new Error("Firestore 데이터베이스를 찾을 수 없습니다.");
             }
             throw err;
           });
@@ -100,6 +106,9 @@ export default function AppGuard({ children }: { children: ReactNode }) {
       const querySnapshot = await getDocs(q).catch(err => {
         if (err.message && err.message.includes('offline')) {
           throw new Error("Firestore 서버 연결 실패 (로그인 처리 중)");
+        }
+        if (err.message && err.message.includes('not found')) {
+          throw new Error("Firestore 데이터베이스를 찾을 수 없습니다.");
         }
         throw err;
       });
