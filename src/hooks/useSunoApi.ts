@@ -34,6 +34,7 @@ export const useSunoApi = (
   const [taskIds, setTaskIds] = useState<string[]>([]);
   const [wavPollingTasks, setWavPollingTasks] = useState<Record<string, string>>({});
   const [isGeneratingWav, setIsGeneratingWav] = useState<Record<string, boolean>>({});
+  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
 
   const songsRef = useRef(songs);
   useEffect(() => {
@@ -742,7 +743,7 @@ export const useSunoApi = (
     
     switch (range) {
       case 'hour': cutoff = new Date(now.getTime() - 60 * 60 * 1000); break;
-      case 'today': cutoff = new Date(now.setHours(0, 0, 0, 0)); break;
+      case 'today': cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break;
       case '24h': cutoff = new Date(now.getTime() - 24 * 60 * 60 * 1000); break;
       case '7d': cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
       default: return;
@@ -759,24 +760,13 @@ export const useSunoApi = (
       }
     });
     
-    if (idsToSelect.length === 0) return;
-
-    const allSelected = idsToSelect.every(id => selectedSongs.has(id));
-    const newSelected = new Set(selectedSongs);
-    
-    if (allSelected) {
-      // Toggle off
-      idsToSelect.forEach(id => newSelected.delete(id));
-    } else {
-      // Add to selection
-      idsToSelect.forEach(id => newSelected.add(id));
-    }
-    setSelectedSongs(newSelected);
+    // Replace current selection with the new range selection
+    setSelectedSongs(new Set(idsToSelect));
   };
 
   const selectGroupSongs = (songIds: string[]) => {
     const newSelected = new Set(selectedSongs);
-    const allSelected = songIds.every(id => newSelected.has(id));
+    const allSelected = songIds.length > 0 && songIds.every(id => newSelected.has(id));
     
     if (allSelected) {
       songIds.forEach(id => newSelected.delete(id));
@@ -785,8 +775,6 @@ export const useSunoApi = (
     }
     setSelectedSongs(newSelected);
   };
-
-  const [selectedSongs, setSelectedSongs] = useState<Set<string>>(new Set());
 
   const handleDownloadWav = async (song: Song, e?: React.MouseEvent) => {
     if (e) e.preventDefault();

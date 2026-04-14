@@ -165,6 +165,50 @@ app.post(['/api/suno/wav/generate', '/suno/wav/generate'], async (req, res) => {
   }
 });
 
+app.get(['/api/suno/wav/record-info', '/suno/wav/record-info'], async (req, res) => {
+  try {
+    const { taskId } = req.query;
+    const authHeader = req.headers.authorization;
+    const apiKey = sanitizeKey(authHeader?.split(' ')[1] || null);
+    let apiUrl = (req.query.baseUrl as string) || 'https://api.sunoapi.org/api/v1';
+    
+    if (!apiKey) {
+      return res.status(401).json({ error: 'Authorization header is required' });
+    }
+
+    if (apiUrl.includes('sunoapi.org') && !apiUrl.includes('api.sunoapi.org')) {
+      apiUrl = apiUrl.replace('sunoapi.org', 'api.sunoapi.org');
+    }
+    if (apiUrl === 'https://api.sunoapi.org' || apiUrl === 'https://api.sunoapi.org/') {
+      apiUrl = 'https://api.sunoapi.org/api/v1';
+    }
+    if (apiUrl.endsWith('/')) {
+      apiUrl = apiUrl.slice(0, -1);
+    }
+
+    const statusUrl = `${apiUrl}/wav/record-info?taskId=${taskId}`;
+    
+    const response = await axios.get(statusUrl, {
+      headers: { 
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      timeout: 15000
+    });
+    return res.json(response.data);
+  } catch (error: any) {
+    const status = error.response?.status || 500;
+    const data = error.response?.data;
+    console.error(`Suno WAV Status API Error (${status}):`, JSON.stringify(data) || error.message);
+    res.status(status).json({
+      error: data?.message || data?.error || error.message || 'Failed to check WAV status',
+      details: data,
+      code: data?.code || status
+    });
+  }
+});
+
 app.get(['/api/suno/status/test', '/suno/status/test'], async (req, res) => {
   try {
     const apiKey = sanitizeKey(req.headers.authorization?.split(' ')[1] || null);
