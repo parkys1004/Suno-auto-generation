@@ -375,6 +375,127 @@ app.get(['/api/suno/status/:id', '/suno/status/:id'], async (req, res) => {
   }
 });
 
+// Proxy audio to avoid CORS issues
+app.get(['/api/proxy/audio', '/proxy/audio'], async (req, res) => {
+  let upstreamResponse: any = null;
+  try {
+    let audioUrl = req.query.url as string;
+    if (!audioUrl || audioUrl === 'undefined' || audioUrl === 'null' || audioUrl === '') {
+      console.error('Audio proxy: Missing or invalid URL');
+      return res.status(400).send('Valid URL is required');
+    }
+
+    audioUrl = audioUrl.trim();
+
+    // Basic URL validation
+    if (!audioUrl.startsWith('http')) {
+      console.error(`Audio proxy: Invalid URL format: ${audioUrl}`);
+      return res.status(400).send('Invalid URL format');
+    }
+
+    console.log(`[Audio Proxy] Requesting: ${audioUrl}`);
+    
+    const headers: any = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'audio/*, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    };
+
+    if (req.headers.range) {
+      headers['Range'] = req.headers.range;
+    }
+
+    // Pass through token if provided
+    const token = req.query.token as string;
+    if (token && token !== 'undefined' && token !== 'null') {
+      headers['Authorization'] = token.startsWith('Bearer ') ? token : `Bearer ${token}`;
+    }
+
+    // Some providers need specific referers
+    if (audioUrl.includes('suno.com') || audioUrl.includes('suno.ai')) {
+      headers['Referer'] = 'https://suno.com';
+      headers['Origin'] = 'https://suno.com';
+    } else if (audioUrl.includes('sunoapi.org')) {
+      headers['Referer'] = 'https://sunoapi.org';
+      headers['Origin'] = 'https://sunoapi.org';
+    }
+
+    upstreamResponse = await axios({
+      method: 'get',
+      url: audioUrl,
+      responseType: 'stream',
+      headers: headers,
+      timeout: 120000, 
+      maxRedirects: 10,
+      validateStatus: (status) => status >= 200 && status < 300 || status === 206
+    });
+
+    // Pass through important headers
+    const headersToPass = [
+      'content-type',
+      'content-length',
+      'content-range',
+      'accept-ranges',
+      'cache-control',
+      'last-modified',
+      'etag'
+    ];
+
+    headersToPass.forEach(header => {
+      if (upstreamResponse.headers[header]) {
+        res.setHeader(header, upstreamResponse.headers[header]);
+      }
+    });
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Pass through the status code
+    res.status(upstreamResponse.status);
+
+    upstreamResponse.data.pipe(res);
+
+    // Handle client disconnect
+    res.on('close', () => {
+      if (upstreamResponse && upstreamResponse.data && !res.writableEnded) {
+        console.log('[Audio Proxy] Client disconnected, destroying upstream stream');
+        upstreamResponse.data.destroy();
+      }
+    });
+
+    // Handle stream errors
+    upstreamResponse.data.on('error', (err: any) => {
+      if (err.message !== 'aborted' && err.code !== 'ECONNRESET') {
+        console.error('[Audio Proxy] Upstream stream error:', err.message);
+      }
+      if (!res.headersSent) {
+        res.status(500).send('Stream error');
+      }
+      res.end();
+    });
+
+  } catch (error: any) {
+    const audioUrl = req.query.url as string;
+    console.error(`[Audio Proxy] Error for ${audioUrl}:`, error.message);
+    
+    if (error.response) {
+      console.error(`[Audio Proxy] Target API responded with status: ${error.response.status}`);
+      if (!res.headersSent) {
+        // If 404, send a more descriptive error back to client
+        if (error.response.status === 404) {
+          return res.status(404).send('The requested audio file was not found on the remote server. It may have expired or not been generated yet.');
+        }
+        return res.status(error.response.status).send(`Proxy target error: ${error.response.status}`);
+      }
+    }
+    
+    if (!res.headersSent) {
+      res.status(500).send(`Failed to proxy audio: ${error.message}`);
+    }
+  }
+});
+
 export default app;
 
 // Global error handler
