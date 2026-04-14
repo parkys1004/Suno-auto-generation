@@ -11,6 +11,11 @@ export default function AppGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const initGuard = async () => {
+      // 10초 후 강제 로딩 종료 (네트워크 지연 대비)
+      const timeoutId = setTimeout(() => {
+        setLoading(false);
+      }, 10000);
+
       try {
         // 1. 주소창 파라미터(?u=) 확인
         const params = new URLSearchParams(window.location.search);
@@ -67,6 +72,7 @@ export default function AppGuard({ children }: { children: ReactNode }) {
       } catch (e) {
         console.error("인증 로드 중 오류:", e);
       } finally {
+        clearTimeout(timeoutId);
         setLoading(false);
       }
     };
@@ -128,18 +134,31 @@ export default function AppGuard({ children }: { children: ReactNode }) {
     window.location.reload();
   };
 
-  if (loading) return <div style={containerStyle}><div className="spinner"></div></div>;
+  if (loading) {
+    return (
+      <div style={{...containerStyle, backgroundColor: '#000'}}>
+        <div style={{textAlign: 'center'}}>
+          <div className="spinner" style={{margin: '0 auto 20px'}}></div>
+          <p style={{color: '#666', fontSize: '14px'}}>인증 정보를 불러오는 중입니다...</p>
+        </div>
+        <style>{`
+          .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
+          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        `}</style>
+      </div>
+    );
+  }
 
   if (!isAuthorized) {
     return (
-      <div style={containerStyle}>
-        <div style={cardStyle}>
+      <div style={{...containerStyle, backgroundColor: '#0a0a0a'}}>
+        <div style={{...cardStyle, border: '1px solid #333'}}>
           <div style={{fontSize: '40px', marginBottom: '10px'}}>👤</div>
           <h2 style={titleStyle}>WELCOME</h2>
           <p style={subtitleStyle}>
             {detectedEmail ? <strong>{detectedEmail}</strong> : "로그인이 필요합니다."}
           </p>
-         
+          
           {detectedEmail ? (
             <>
               <input
@@ -153,18 +172,23 @@ export default function AppGuard({ children }: { children: ReactNode }) {
               <button onClick={handleLogin} style={buttonStyle}>입장하기</button>
             </>
           ) : (
-            <button
-              onClick={() => window.location.href = "https://bang-guseog.com"}
-              style={buttonStyle}
-            >
-              본점에서 로그인하기
-            </button>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
+              <p style={{fontSize: '13px', color: '#888', marginBottom: '15px'}}>
+                본 사이트는 승인된 사용자만 이용 가능합니다.
+              </p>
+              <button
+                onClick={() => window.location.href = "https://bang-guseog.com"}
+                style={buttonStyle}
+              >
+                본점에서 로그인하기
+              </button>
+            </div>
           )}
+          
+          <div style={{marginTop: '20px', fontSize: '10px', color: '#444'}}>
+            Status: {detectedEmail ? 'Email Detected' : 'No Email'} | Auth: {isAuthorized ? 'Yes' : 'No'}
+          </div>
         </div>
-        <style>{`
-          .spinner { width: 40px; height: 40px; border: 4px solid #333; border-top: 4px solid #007bff; border-radius: 50%; animation: spin 1s linear infinite; }
-          @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        `}</style>
       </div>
     );
   }
@@ -179,7 +203,7 @@ export default function AppGuard({ children }: { children: ReactNode }) {
 }
 
 // 스타일 정의 (어두운 테마)
-const containerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#121212', color: '#fff', fontFamily: 'sans-serif' };
+const containerStyle: React.CSSProperties = { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#121212', color: '#fff', fontFamily: 'sans-serif' };
 const cardStyle: React.CSSProperties = { padding: '40px', backgroundColor: '#1e1e1e', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '380px', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' };
 const titleStyle: React.CSSProperties = { fontSize: '24px', fontWeight: 'bold', marginBottom: '8px' };
 const subtitleStyle: React.CSSProperties = { fontSize: '15px', color: '#aaa', marginBottom: '30px' };

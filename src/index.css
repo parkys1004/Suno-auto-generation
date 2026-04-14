@@ -12,6 +12,18 @@
   }
 }
 
+:root {
+  --bg-primary: #09090b;
+  --bg-secondary: #18181b;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --border-color: #27272a;
+  --accent-primary: #4f46e5;
+  --accent-hover: #6366f1;
+  --accent-text: #818cf8;
+  --text-on-accent: #ffffff;
+}
+
 .dark {
   --bg-primary: #09090b;
   --bg-secondary: #18181b;
