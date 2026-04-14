@@ -217,20 +217,30 @@ export const useSunoApi = (
     const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(wavUrl)}`;
 
     try {
+      setSuccess(`'${fileName}' 다운로드를 준비 중입니다...`);
       const response = await fetch(proxyUrl);
+      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+      
       const blob = await response.blob();
+      if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Delay revocation to ensure download starts in all browsers
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
+      
       setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('WAV download failed:', err);
-      setError('WAV 파일 다운로드에 실패했습니다.');
+      setError(`WAV 파일 다운로드에 실패했습니다: ${err.message}`);
     }
   };
 
@@ -282,27 +292,40 @@ export const useSunoApi = (
 
   const handleDownload = async (song: Song, e: React.MouseEvent) => {
     e.preventDefault();
-    if (!song.audio_url) return;
+    if (!song.audio_url) {
+      setError('다운로드할 수 있는 오디오 URL이 없습니다.');
+      return;
+    }
     
     const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.mp3`;
     const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
 
     try {
+      setSuccess(`'${fileName}' 다운로드를 준비 중입니다...`);
       const response = await fetch(proxyUrl);
+      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+      
       const blob = await response.blob();
+      if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
+
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      
+      // Delay revocation to ensure download starts in all browsers
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 100);
+
       setSuccess(`'${fileName}' 다운로드가 시작되었습니다.`);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Download failed:', err);
-      setError('파일 다운로드에 실패했습니다.');
+      setError(`파일 다운로드에 실패했습니다: ${err.message}`);
     }
   };
 
@@ -330,11 +353,12 @@ export const useSunoApi = (
         
         try {
           const response = await fetch(proxyUrl);
-          if (!response.ok) throw new Error(`Failed to fetch ${fileName}`);
+          if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
           const blob = await response.blob();
+          if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
           folder?.file(fileName, blob);
-        } catch (err) {
-          console.error(`Error downloading ${fileName}:`, err);
+        } catch (err: any) {
+          console.error(`Error downloading ${fileName}:`, err.message);
         }
       }
 

@@ -472,11 +472,13 @@ async function startServer() {
     try {
       const audioUrl = req.query.url as string;
       if (!audioUrl || audioUrl === 'undefined' || audioUrl === 'null' || audioUrl === '') {
+        console.error('Audio proxy: Missing or invalid URL');
         return res.status(400).send('Valid URL is required');
       }
 
       // Basic URL validation
       if (!audioUrl.startsWith('http')) {
+        console.error(`Audio proxy: Invalid URL format: ${audioUrl}`);
         return res.status(400).send('Invalid URL format');
       }
 
@@ -487,11 +489,12 @@ async function startServer() {
         responseType: 'stream',
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://suno.com/',
-          'Accept': '*/*'
+          'Referer': 'https://suno.com',
+          'Accept': '*/*',
+          'Range': req.headers.range // Pass through range headers for better player support
         },
-        timeout: 20000,
-        maxRedirects: 5
+        timeout: 60000, // Increase timeout to 60s
+        maxRedirects: 10
       });
 
       // Set appropriate headers
@@ -502,6 +505,10 @@ async function startServer() {
         res.setHeader('Content-Length', response.headers['content-length']);
       }
       
+      if (response.headers['content-range']) {
+        res.setHeader('Content-Range', response.headers['content-range']);
+      }
+
       // Enable range requests if possible
       if (response.headers['accept-ranges']) {
         res.setHeader('Accept-Ranges', response.headers['accept-ranges']);
@@ -509,19 +516,26 @@ async function startServer() {
 
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      // If target returned a partial content status, pass it through
+      if (response.status === 206) {
+        res.status(206);
+      }
 
       response.data.pipe(res);
 
       // Handle client disconnect
       res.on('close', () => {
-        console.log('Client disconnected from audio proxy, destroying upstream stream');
-        response.data.destroy();
+        if (!res.writableEnded) {
+          console.log('Client disconnected from audio proxy, destroying upstream stream');
+          response.data.destroy();
+        }
       });
 
       // Handle stream errors
       response.data.on('error', (err: any) => {
         // Don't log "aborted" errors as they are usually just client disconnects
-        if (err.message !== 'aborted') {
+        if (err.message !== 'aborted' && err.code !== 'ECONNRESET') {
           console.error('Stream error:', err.message);
         }
         
@@ -534,10 +548,14 @@ async function startServer() {
     } catch (error: any) {
       console.error('Audio proxy error:', error.message);
       if (error.response) {
-        console.error('Target API responded with:', error.response.status);
-        return res.status(error.response.status).send(`Proxy target error: ${error.response.status}`);
+        console.error('Target API responded with status:', error.response.status);
+        if (!res.headersSent) {
+          return res.status(error.response.status).send(`Proxy target error: ${error.response.status}`);
+        }
       }
-      res.status(500).send('Failed to proxy audio');
+      if (!res.headersSent) {
+        res.status(500).send('Failed to proxy audio');
+      }
     }
   });
 
