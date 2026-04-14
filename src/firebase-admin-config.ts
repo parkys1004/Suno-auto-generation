@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, getDocFromServer, doc } from "firebase/firestore";
+import { initializeFirestore, getDocFromServer, doc } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
@@ -14,17 +14,26 @@ const firebaseConfig = {
 
 // 별도 이름으로 초기화하여 충돌 방지
 const adminApp = initializeApp(firebaseConfig, "admin-system");
-// Note: Using default database for this project
-export const adminDb = getFirestore(adminApp);
+
+// Firestore 초기화 (Long Polling 강제 설정으로 연결성 개선)
+export const adminDb = initializeFirestore(adminApp, {
+  experimentalForceLongPolling: true
+});
+
 export const auth = getAuth(adminApp);
 
 // Firestore 연결 테스트
 async function testConnection() {
   try {
+    // 서버에서 직접 문서를 가져오려고 시도하여 연결 상태 확인
     await getDocFromServer(doc(adminDb, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Firebase configuration error: The client is offline or cannot reach the backend.");
+    console.log("Firebase connection successful.");
+  } catch (error: any) {
+    if (error.message && error.message.includes('the client is offline')) {
+      console.error("Firebase configuration error: The client is offline or cannot reach the backend. Please check if Firestore is enabled for this project.");
+    } else {
+      // 다른 에러는 무시 (테스트용 문서가 없을 수 있으므로)
+      console.log("Firebase connection test completed (document may not exist).");
     }
   }
 }

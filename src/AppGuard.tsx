@@ -26,7 +26,12 @@ export default function AppGuard({ children }: { children: ReactNode }) {
 
         // 3. 서버에서 마스터 비밀번호 로드
         const docRef = doc(adminDb, "config", "globalConfig");
-        const docSnap = await getDoc(docRef);
+        const docSnap = await getDoc(docRef).catch(err => {
+          if (err.message && err.message.includes('offline')) {
+            throw new Error("Firestore 서버에 연결할 수 없습니다. 인터넷 연결이나 Firebase 설정을 확인해주세요.");
+          }
+          throw err;
+        });
         let serverPw = "";
         if (docSnap.exists()) {
           serverPw = docSnap.data().currentPassword;
@@ -38,7 +43,12 @@ export default function AppGuard({ children }: { children: ReactNode }) {
         if (savedAuth === 'true' && currentEmail) {
           const usersRef = collection(adminDb, "users");
           const q = query(usersRef, where("email", "==", currentEmail.trim()));
-          const querySnapshot = await getDocs(q);
+          const querySnapshot = await getDocs(q).catch(err => {
+            if (err.message && err.message.includes('offline')) {
+              throw new Error("Firestore 서버 연결 실패 (사용자 확인 중)");
+            }
+            throw err;
+          });
 
           if (!querySnapshot.empty) {
             const userData = querySnapshot.docs[0].data();
@@ -81,7 +91,12 @@ export default function AppGuard({ children }: { children: ReactNode }) {
       // 2. DB 최종 확인 (이메일 존재 및 기간)
       const usersRef = collection(adminDb, "users");
       const q = query(usersRef, where("email", "==", detectedEmail.trim()));
-      const querySnapshot = await getDocs(q);
+      const querySnapshot = await getDocs(q).catch(err => {
+        if (err.message && err.message.includes('offline')) {
+          throw new Error("Firestore 서버 연결 실패 (로그인 처리 중)");
+        }
+        throw err;
+      });
 
       if (querySnapshot.empty) {
         alert("승인되지 않은 이메일입니다.");
