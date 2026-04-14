@@ -469,6 +469,7 @@ async function startServer() {
 
   // Proxy audio to avoid CORS issues
   app.get('/api/proxy/audio', async (req, res) => {
+    let upstreamResponse: any = null;
     try {
       const audioUrl = req.query.url as string;
       if (!audioUrl || audioUrl === 'undefined' || audioUrl === 'null' || audioUrl === '') {
@@ -483,62 +484,70 @@ async function startServer() {
       }
 
       console.log(`Proxying audio request: ${audioUrl}`);
-      const response = await axios({
+      
+      const headers: any = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+      };
+
+      if (req.headers.range) {
+        headers['Range'] = req.headers.range;
+      }
+
+      // Some providers need specific referers
+      if (audioUrl.includes('suno.com')) {
+        headers['Referer'] = 'https://suno.com';
+      } else if (audioUrl.includes('sunoapi.org')) {
+        headers['Referer'] = 'https://sunoapi.org';
+      }
+
+      upstreamResponse = await axios({
         method: 'get',
         url: audioUrl,
         responseType: 'stream',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://suno.com',
-          'Accept': '*/*',
-          'Range': req.headers.range // Pass through range headers for better player support
-        },
-        timeout: 60000, // Increase timeout to 60s
-        maxRedirects: 10
+        headers: headers,
+        timeout: 120000, // Increase timeout to 120s for large files
+        maxRedirects: 10,
+        validateStatus: (status) => status >= 200 && status < 400
       });
 
-      // Set appropriate headers
-      const contentType = response.headers['content-type'] || 'audio/mpeg';
-      res.setHeader('Content-Type', contentType);
-      
-      if (response.headers['content-length']) {
-        res.setHeader('Content-Length', response.headers['content-length']);
-      }
-      
-      if (response.headers['content-range']) {
-        res.setHeader('Content-Range', response.headers['content-range']);
-      }
+      // Pass through important headers
+      const headersToPass = [
+        'content-type',
+        'content-length',
+        'content-range',
+        'accept-ranges',
+        'cache-control',
+        'last-modified',
+        'etag'
+      ];
 
-      // Enable range requests if possible
-      if (response.headers['accept-ranges']) {
-        res.setHeader('Accept-Ranges', response.headers['accept-ranges']);
-      }
+      headersToPass.forEach(header => {
+        if (upstreamResponse.headers[header]) {
+          res.setHeader(header, upstreamResponse.headers[header]);
+        }
+      });
 
       res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
       
-      // If target returned a partial content status, pass it through
-      if (response.status === 206) {
-        res.status(206);
-      }
+      // Pass through the status code (especially for 206 Partial Content)
+      res.status(upstreamResponse.status);
 
-      response.data.pipe(res);
+      upstreamResponse.data.pipe(res);
 
       // Handle client disconnect
       res.on('close', () => {
-        if (!res.writableEnded) {
+        if (upstreamResponse && upstreamResponse.data && !res.writableEnded) {
           console.log('Client disconnected from audio proxy, destroying upstream stream');
-          response.data.destroy();
+          upstreamResponse.data.destroy();
         }
       });
 
       // Handle stream errors
-      response.data.on('error', (err: any) => {
-        // Don't log "aborted" errors as they are usually just client disconnects
+      upstreamResponse.data.on('error', (err: any) => {
         if (err.message !== 'aborted' && err.code !== 'ECONNRESET') {
-          console.error('Stream error:', err.message);
+          console.error('Upstream stream error:', err.message);
         }
-        
         if (!res.headersSent) {
           res.status(500).send('Stream error');
         }

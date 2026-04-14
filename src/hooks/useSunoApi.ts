@@ -162,25 +162,51 @@ export const useSunoApi = (
     const currentWavTaskIds = Object.keys(wavPollingTasks);
     
     if (currentWavTaskIds.length > 0) {
+      // Keep track of poll counts to prevent infinite polling
+      const pollCounts: Record<string, number> = {};
+
       intervalId = setInterval(async () => {
         const tasksToPoll = { ...wavPollingTasks };
         for (const songId of Object.keys(tasksToPoll)) {
           const tId = tasksToPoll[songId];
+          pollCounts[songId] = (pollCounts[songId] || 0) + 1;
+
+          // Timeout after 5 minutes (60 polls * 5s)
+          if (pollCounts[songId] > 60) {
+            setWavPollingTasks(prev => {
+              const newTasks = { ...prev };
+              delete newTasks[songId];
+              return newTasks;
+            });
+            setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
+            setError('WAV 변환 시간이 초과되었습니다. 나중에 다시 시도해주세요.');
+            continue;
+          }
+
           try {
             const response = await axios.get(`/api/suno/wav/record-info?taskId=${tId}&baseUrl=${encodeURIComponent(baseUrl)}`, {
               headers: { Authorization: `Bearer ${apiKey}` }
             });
             
             let data = response.data;
-            if (data && data.code === 200) {
-              data = data.data;
+            // Handle common wrapper formats
+            if (data && (data.code === 200 || data.code === 0)) {
+              data = data.data || data;
             }
             
             if (data) {
-              const wavUrl = data.response?.audioWavUrl || data.response?.wavUrl;
-              const status = data.successFlag || data.status;
+              // Try multiple possible paths for the WAV URL
+              const wavUrl = data.response?.audioWavUrl || 
+                             data.response?.wavUrl || 
+                             data.wavUrl || 
+                             data.audioWavUrl ||
+                             data.audio_wav_url ||
+                             data.url;
+
+              // Try multiple possible paths for status
+              const status = (data.successFlag || data.status || data.state || '').toString().toUpperCase();
               
-              if (wavUrl && status === 'SUCCESS') {
+              if (wavUrl && (status === 'SUCCESS' || status === 'COMPLETE' || status === '1' || data.successFlag === true)) {
                 setSongs(prev => prev.map(s => s.id === songId ? { ...s, wav_url: wavUrl } : s));
                 setWavPollingTasks(prev => {
                   const newTasks = { ...prev };
@@ -192,18 +218,29 @@ export const useSunoApi = (
                 const song = songsRef.current.find(s => s.id === songId);
                 const title = song?.title || 'Untitled';
                 downloadWavFile(wavUrl, title);
-              } else if (status === 'FAILED' || status === 'CREATE_TASK_FAILED' || status === 'GENERATE_AUDIO_FAILED') {
+              } else if (status === 'FAILED' || status === 'ERROR' || status === 'CREATE_TASK_FAILED' || status === 'GENERATE_AUDIO_FAILED') {
                 setWavPollingTasks(prev => {
                   const newTasks = { ...prev };
                   delete newTasks[songId];
                   return newTasks;
                 });
                 setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
-                setError(`WAV 변환 실패: ${data.errorMessage || '오디오 URL을 찾을 수 없습니다.'}`);
+                setError(`WAV 변환 실패: ${data.errorMessage || data.msg || '오디오 변환 중 오류가 발생했습니다.'}`);
               }
             }
-          } catch (err) {
+          } catch (err: any) {
             console.error('WAV Status check error:', err);
+            // If it's a 404, maybe the task is still being created? 
+            // But if it persists, we should stop.
+            if (err.response?.status === 404 && pollCounts[songId] > 10) {
+               // Stop after 10 failed attempts with 404
+               setWavPollingTasks(prev => {
+                const newTasks = { ...prev };
+                delete newTasks[songId];
+                return newTasks;
+              });
+              setIsGeneratingWav(prev => ({ ...prev, [songId]: false }));
+            }
           }
         }
       }, 5000);
@@ -259,34 +296,47 @@ export const useSunoApi = (
       });
       
       if (response.data) {
-        let newTaskId = response.data?.data?.taskId || response.data?.taskId || response.data?.task_id;
-        if (!newTaskId && Array.isArray(response.data) && response.data.length > 0) {
-          newTaskId = response.data[0].taskId || response.data[0].task_id || response.data[0].id;
+        // Handle common wrapper formats
+        let resData = response.data;
+        if (resData.code === 200 || resData.code === 0) {
+          resData = resData.data || resData;
         }
 
-        const directWavUrl = response.data?.data?.wavUrl || response.data?.wavUrl || response.data?.audioUrl;
+        let newTaskId = resData.taskId || resData.task_id || resData.id;
+        
+        if (!newTaskId && Array.isArray(resData) && resData.length > 0) {
+          newTaskId = resData[0].taskId || resData[0].task_id || resData[0].id;
+        }
+
+        const directWavUrl = resData.wavUrl || resData.audioWavUrl || resData.audioUrl || resData.url;
 
         if (newTaskId && newTaskId !== song.taskId && newTaskId !== song.id) {
           setSuccess('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
           setWavPollingTasks(prev => ({ ...prev, [song.id]: newTaskId }));
-        } else if (directWavUrl && directWavUrl.endsWith('.wav')) {
+        } else if (directWavUrl && directWavUrl.toLowerCase().includes('.wav')) {
           setSuccess('WAV 변환이 완료되었습니다.');
           setSongs(prev => prev.map(s => s.id === song.id ? { ...s, wav_url: directWavUrl } : s));
           setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
           downloadWavFile(directWavUrl, song.title);
+        } else if (newTaskId) {
+          // If we got a taskId but it's the same as before, still poll
+          setSuccess('WAV 변환 상태를 확인 중입니다...');
+          setWavPollingTasks(prev => ({ ...prev, [song.id]: newTaskId }));
         } else {
-          if (song.audio_url?.endsWith('.wav') || song.wav_url) {
+          // If we have nothing, maybe it's already done?
+          if (song.audio_url?.toLowerCase().includes('.wav') || song.wav_url) {
             setSuccess('이미 WAV 형식이거나 변환이 완료되었습니다.');
+            setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
             downloadWavFile(song.wav_url || song.audio_url!, song.title);
           } else {
-            setError('WAV 변환 작업 ID를 받지 못했습니다. 잠시 후 다시 시도해주세요.');
+            throw new Error('변환 요청에 실패했습니다. (Task ID를 생성할 수 없음)');
           }
-          setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
         }
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || err.response?.data?.message || err.message || 'WAV 변환 요청에 실패했습니다.');
+      console.error('WAV generation failed:', err);
       setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
+      setError(`WAV 변환 요청 실패: ${err.response?.data?.message || err.message}`);
     }
   };
 
