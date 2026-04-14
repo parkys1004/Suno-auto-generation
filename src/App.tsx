@@ -15,6 +15,7 @@ import { PromptLibrary } from './components/PromptLibrary';
 import { GenerationForm } from './components/GenerationForm';
 import { ManualModal } from './components/ManualModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { ToastNotification } from './components/ToastNotification';
 
 import { useUIState } from './hooks/useUIState';
 import { useSettings } from './hooks/useSettings';
@@ -543,6 +544,18 @@ export default function App() {
         message={confirmConfig.message}
         onConfirm={confirmConfig.onConfirm}
         onCancel={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* Global Toast Notifications */}
+      <ToastNotification 
+        message={error} 
+        type="error" 
+        onClose={() => setError('')} 
+      />
+      <ToastNotification 
+        message={success} 
+        type="success" 
+        onClose={() => setSuccess('')} 
       />
 
       <style dangerouslySetInnerHTML={{ __html: `

@@ -1012,18 +1012,6 @@ export function GenerationForm({
 
       {/* Generate Button */}
       <div className="pt-4 sticky bottom-0 bg-[var(--bg-primary)] pb-4 flex flex-col gap-2">
-        {error && (
-          <div className="flex items-center gap-2 text-red-400 bg-red-400/10 p-3 rounded-xl text-sm mb-2 border border-red-400/20">
-            <AlertCircle className="w-4 h-4 shrink-0" />
-            <p>{error}</p>
-          </div>
-        )}
-        {success && (
-          <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 p-3 rounded-xl text-sm mb-2 border border-emerald-400/20">
-            <Check className="w-4 h-4 shrink-0" />
-            <p>{success}</p>
-          </div>
-        )}
         <div className="flex gap-2">
           <button 
             onClick={onReset}
