@@ -251,12 +251,23 @@ export const useSunoApi = (
   const downloadWavFile = async (wavUrl: string, title: string) => {
     const safeTitle = (title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.wav`;
-    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(wavUrl)}`;
+    // Pass apiKey as token to proxy in case the URL is protected
+    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(wavUrl)}&token=${encodeURIComponent(apiKey)}`;
 
     try {
       setSuccess(`'${fileName}' 다운로드를 준비 중입니다...`);
       const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        let errorMsg = `서버 응답 오류: ${response.status}`;
+        try {
+          const text = await response.text();
+          if (text) errorMsg = text;
+        } catch (e) {
+          if (response.statusText) errorMsg += ` (${response.statusText})`;
+        }
+        throw new Error(errorMsg);
+      }
       
       const blob = await response.blob();
       if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
@@ -349,12 +360,23 @@ export const useSunoApi = (
     
     const safeTitle = (song.title || 'Untitled').replace(/[\\/:*?"<>|]/g, '_');
     const fileName = `${safeTitle}.mp3`;
-    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
+    // Pass apiKey as token to proxy in case the URL is protected
+    const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}&token=${encodeURIComponent(apiKey)}`;
 
     try {
       setSuccess(`'${fileName}' 다운로드를 준비 중입니다...`);
       const response = await fetch(proxyUrl);
-      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        let errorMsg = `서버 응답 오류: ${response.status}`;
+        try {
+          const text = await response.text();
+          if (text) errorMsg = text;
+        } catch (e) {
+          if (response.statusText) errorMsg += ` (${response.statusText})`;
+        }
+        throw new Error(errorMsg);
+      }
       
       const blob = await response.blob();
       if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
@@ -402,7 +424,9 @@ export const useSunoApi = (
         const proxyUrl = `/api/proxy/audio?url=${encodeURIComponent(song.audio_url)}`;
         
         try {
-          const response = await fetch(proxyUrl);
+          // Pass apiKey as token to proxy
+          const proxyUrlWithToken = `${proxyUrl}&token=${encodeURIComponent(apiKey)}`;
+          const response = await fetch(proxyUrlWithToken);
           if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
           const blob = await response.blob();
           if (blob.size === 0) throw new Error('파일이 비어 있습니다.');
