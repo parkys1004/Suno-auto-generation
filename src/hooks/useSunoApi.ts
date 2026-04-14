@@ -299,19 +299,21 @@ export const useSunoApi = (
     
     setIsGeneratingWav(prev => ({ ...prev, [song.id]: true }));
     try {
+      const effectiveTaskId = song.taskId || song.id;
       const response = await axios.post('/api/suno/wav/generate', {
         apiKey,
         baseUrl,
-        taskId: song.taskId || song.id,
+        taskId: effectiveTaskId,
         audioId: song.id,
         callBackUrl: ''
       });
       
       if (response.data) {
-        // Handle common wrapper formats
         let resData = response.data;
         if (resData.code === 200 || resData.code === 0) {
           resData = resData.data || resData;
+        } else if (resData.code !== undefined) {
+          throw new Error(resData.msg || resData.message || `API 오류 (코드: ${resData.code})`);
         }
 
         let newTaskId = resData.taskId || resData.task_id || resData.id;
@@ -322,7 +324,7 @@ export const useSunoApi = (
 
         const directWavUrl = resData.wavUrl || resData.audioWavUrl || resData.audioUrl || resData.url;
 
-        if (newTaskId && newTaskId !== song.taskId && newTaskId !== song.id) {
+        if (newTaskId && newTaskId !== effectiveTaskId) {
           setSuccess('WAV 변환 요청이 시작되었습니다. 완료 시 다운로드 버튼이 활성화됩니다.');
           setWavPollingTasks(prev => ({ ...prev, [song.id]: newTaskId }));
         } else if (directWavUrl && directWavUrl.toLowerCase().includes('.wav')) {
@@ -331,24 +333,24 @@ export const useSunoApi = (
           setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
           downloadWavFile(directWavUrl, song.title);
         } else if (newTaskId) {
-          // If we got a taskId but it's the same as before, still poll
           setSuccess('WAV 변환 상태를 확인 중입니다...');
           setWavPollingTasks(prev => ({ ...prev, [song.id]: newTaskId }));
         } else {
-          // If we have nothing, maybe it's already done?
           if (song.audio_url?.toLowerCase().includes('.wav') || song.wav_url) {
             setSuccess('이미 WAV 형식이거나 변환이 완료되었습니다.');
             setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
             downloadWavFile(song.wav_url || song.audio_url!, song.title);
           } else {
-            throw new Error('변환 요청에 실패했습니다. (Task ID를 생성할 수 없음)');
+            const errorDetail = resData.msg || resData.message || 'API에서 Task ID를 생성하지 못했습니다.';
+            throw new Error(`변환 요청 실패: ${errorDetail}`);
           }
         }
       }
     } catch (err: any) {
       console.error('WAV generation failed:', err);
       setIsGeneratingWav(prev => ({ ...prev, [song.id]: false }));
-      setError(`WAV 변환 요청 실패: ${err.response?.data?.message || err.message}`);
+      const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message;
+      setError(`WAV 변환 요청 실패: ${errorMsg}`);
     }
   };
 
