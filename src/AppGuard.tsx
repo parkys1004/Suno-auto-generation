@@ -20,6 +20,25 @@ export default function AppGuard({ children }: { children: ReactNode }) {
         // 1. 주소창 파라미터(?u=) 확인
         const params = new URLSearchParams(window.location.search);
         const emailParam = params.get('u');
+        const sessionToken = params.get('s');
+
+        // [New] 세션 토큰(s) 자동 인증 확인
+        if (sessionToken) {
+          const sessionDocRef = doc(adminDb, 'access_sessions', sessionToken);
+          const sessionDoc = await getDoc(sessionDocRef).catch(() => null);
+          
+          if (sessionDoc && sessionDoc.exists()) {
+            const data = sessionDoc.data();
+            const now = new Date();
+            // Firestore Timestamp 또는 ISO string 대응
+            const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
+            
+            if (now < expiresAt && (data.tier === 'silver' || data.tier === 'gold' || data.tier === 'admin')) {
+              console.log("자동 토큰 인증 성공!");
+              setIsAuthorized(true);
+            }
+          }
+        }
        
         // 2. 브라우저 저장소(localStorage)에서 기존 기록 확인
         const savedEmail = localStorage.getItem('user_email');
