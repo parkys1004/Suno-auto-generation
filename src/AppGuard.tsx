@@ -17,12 +17,27 @@ export default function AppGuard({ children }: { children: ReactNode }) {
       }, 10000);
 
       try {
-        // 1. 주소창 파라미터(?u=) 확인
+        // 1. 파라미터 확인 및 로컬 스토리지 데이터 로드
         const params = new URLSearchParams(window.location.search);
         const emailParam = params.get('u');
-        const sessionToken = params.get('s');
+        let sessionToken = params.get('s');
+        
+        const savedSessionToken = localStorage.getItem('app_session_token');
+        const savedEmail = localStorage.getItem('user_email');
+        const savedAuth = localStorage.getItem('app_access_token');
 
-        // [New] 세션 토큰(s) 자동 인증 확인
+        // URL에 토큰이 없으면 로컬 스토리지에서 가져옴
+        if (!sessionToken && savedSessionToken) {
+          sessionToken = savedSessionToken;
+        }
+
+        // 우선순위: 주소창 이메일 > 저장된 이메일
+        const currentEmail = emailParam ? decodeURIComponent(emailParam) : savedEmail;
+        if (currentEmail) setDetectedEmail(currentEmail);
+
+        let isSessionValid = false;
+
+        // [New] 세션 토큰(s) 자동 인증 확인 (URL 또는 로컬 스토리지)
         if (sessionToken) {
           const sessionDocRef = doc(adminDb, 'access_sessions', sessionToken);
           const sessionDoc = await getDoc(sessionDocRef).catch(() => null);
@@ -30,25 +45,39 @@ export default function AppGuard({ children }: { children: ReactNode }) {
           if (sessionDoc && sessionDoc.exists()) {
             const data = sessionDoc.data();
             const now = new Date();
-            // Firestore Timestamp 또는 ISO string 대응
             const expiresAt = data.expiresAt?.toDate ? data.expiresAt.toDate() : new Date(data.expiresAt);
             
-            if (now < expiresAt && (data.tier === 'silver' || data.tier === 'gold' || data.tier === 'admin')) {
-              console.log("자동 토큰 인증 성공!");
-              setIsAuthorized(true);
+            if (now < expiresAt) {
+              // 등급 확인 (추가적인 유료 등급 이름이 있을 수 있어 방어적으로 여러 등급 포함)
+              const allowedTiers = ['silver', 'gold', 'admin', 'pro', 'premium', 'vip'];
+              if (allowedTiers.includes(data.tier?.toLowerCase())) {
+                console.log("자동 토큰 인증 성공!");
+                setIsAuthorized(true);
+                isSessionValid = true;
+
+                // 로그인 유지 처리를 위해 로컬 스토리지 갱신
+                localStorage.setItem('app_session_token', sessionToken);
+                localStorage.setItem('app_access_token', 'true');
+                if (data.email) {
+                  localStorage.setItem('user_email', data.email);
+                  setDetectedEmail(data.email);
+                } else if (currentEmail) {
+                  localStorage.setItem('user_email', currentEmail);
+                }
+              } else {
+                console.warn(`토큰은 유효하나 접근 권한(등급)이 부족합니다. 현재 등급: ${data.tier}`);
+              }
+            } else {
+              console.warn("세션 토큰이 만료되었습니다.");
+              localStorage.removeItem('app_session_token');
             }
+          } else {
+            console.warn("유효하지 않은 세션 토큰이거나 삭제되었습니다.");
+            localStorage.removeItem('app_session_token');
           }
         }
        
-        // 2. 브라우저 저장소(localStorage)에서 기존 기록 확인
-        const savedEmail = localStorage.getItem('user_email');
-        const savedAuth = localStorage.getItem('app_access_token');
-
-        // 우선순위: 주소창 이메일 > 저장된 이메일
-        const currentEmail = emailParam ? decodeURIComponent(emailParam) : savedEmail;
-        if (currentEmail) setDetectedEmail(currentEmail);
-
-        // 3. 서버에서 마스터 비밀번호 로드
+        // 3. 서버에서 마스터 비밀번호 로드 (폼 로그인용 백업)
         const docRef = doc(adminDb, "config", "globalConfig");
         const docSnap = await getDoc(docRef).catch(err => {
           if (err.message && err.message.includes('offline')) {
@@ -59,15 +88,15 @@ export default function AppGuard({ children }: { children: ReactNode }) {
           }
           throw err;
         });
+        
         let serverPw = "";
         if (docSnap.exists()) {
           serverPw = docSnap.data().currentPassword;
           setCorrectPw(serverPw);
         }
 
-        // 4. [핵심] 자동 접속 로직
-        // 저장된 토큰이 'true'이고 이메일이 있다면 DB에서 실시간 검증 후 자동 통과
-        if (savedAuth === 'true' && currentEmail) {
+        // 4. [기존 백업 로직] 세션 토큰 인증에 실패했을 때만 기존 DB 검증 로직 실행
+        if (!isSessionValid && savedAuth === 'true' && currentEmail) {
           const usersRef = collection(adminDb, "users");
           const q = query(usersRef, where("email", "==", currentEmail.trim()));
           const querySnapshot = await getDocs(q).catch(err => {
@@ -92,6 +121,9 @@ export default function AppGuard({ children }: { children: ReactNode }) {
               // 기간 만료 시 저장 정보 삭제
               localStorage.removeItem('app_access_token');
             }
+          } else {
+             // users 컬렉션에 해당 유저가 없는 경우
+             localStorage.removeItem('app_access_token');
           }
         }
       } catch (e) {
